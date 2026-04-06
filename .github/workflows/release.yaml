@@ -11,10 +11,6 @@ on:
       release-config-name:
         required: true
         type: string
-      update-major-tag:
-        required: false
-        type: boolean
-        default: true
       image-name:
         description: "Docker image name (e.g., owner/repo). Enables image build/push when set."
         required: false
@@ -45,6 +41,11 @@ on:
         required: false
         type: string
         default: ""
+      go-version-file:
+        description: "Path to go.mod or go.work file for Go version detection. Used by the GoReleaser job."
+        required: false
+        type: string
+        default: "go.mod"
     secrets:
       github-token:
         required: true
@@ -94,6 +95,11 @@ jobs:
         uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
         with:
           egress-policy: audit
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: true # Required for git push of tags
       - name: Draft release
         id: release-drafter
         uses: release-drafter/release-drafter@5de93583980a40bd78603b6dfdcda5b4df377b32 # v7.2.0
@@ -106,40 +112,19 @@ jobs:
         run: |
           short_tag=$(echo "${{ steps.release-drafter.outputs.tag_name }}" | cut -d. -f1)
           echo "SHORT_TAG=$short_tag" >> "$GITHUB_OUTPUT"
-
-  update_major_tag:
-    needs: create_release
-    if: ${{ inputs.update-major-tag && needs.create_release.outputs.full-tag != '' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write # Force-push major version tag
-    steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
-        with:
-          egress-policy: audit
-
-      - name: Checkout Repo
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
-          ref: ${{ needs.create_release.outputs.full-tag }}
-          persist-credentials: true # Required for git push
-
-      - name: Force update major tag
+      - name: Create and push tags
         run: |
-          git tag -f "${SHORT}" "${FULL}"
-          git push -f origin "${SHORT}"
-        env:
-          SHORT: ${{ needs.create_release.outputs.short-tag }}
-          FULL: ${{ needs.create_release.outputs.full-tag }}
+          git tag "${{ steps.release-drafter.outputs.tag_name }}"
+          git tag -f "${{ steps.get_tag_name.outputs.SHORT_TAG }}" "${{ steps.release-drafter.outputs.tag_name }}"
+          git push origin "${{ steps.release-drafter.outputs.tag_name }}"
+          git push -f origin "${{ steps.get_tag_name.outputs.SHORT_TAG }}"
 
   release_goreleaser:
     needs: create_release
     if: ${{ inputs.goreleaser-config-path != '' && needs.create_release.outputs.full-tag != '' }}
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Upload release assets and push tags
+      contents: write # Upload release assets
       id-token: write # Federate for artifact attestation
       attestations: write # Generate artifact attestations
     steps:
@@ -152,17 +137,30 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
-          persist-credentials: true # Required for git push of tags
+          persist-credentials: false
 
-      - name: Create and push tag
+      - name: Install yq
+        uses: mikefarah/yq@f71c26247e2b5278a5e07e662b2c6e3a1a72e67e # v4.45.4
+        with:
+          cmd: echo "yq installed"
+
+      - name: Validate GoReleaser config has release disabled
         run: |
-          git tag "${{ needs.create_release.outputs.full-tag }}"
-          git push origin "${{ needs.create_release.outputs.full-tag }}"
+          config="${{ inputs.goreleaser-config-path }}"
+          if ! [ -f "$config" ]; then
+            echo "::error::GoReleaser config file not found: $config"
+            exit 1
+          fi
+          release_disabled=$(yq '.release.disable' "$config")
+          if [ "$release_disabled" != "true" ]; then
+            echo "::error::GoReleaser config must have 'release: disable: true' to prevent conflicting with the draft release created by this workflow. See https://github.com/github-community-projects/ospo-reusable-workflows/blob/main/docs/release.md#goreleaser-configuration"
+            exit 1
+          fi
 
       - name: Set up Go
         uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
-          go-version-file: go.mod
+          go-version-file: ${{ inputs.go-version-file }}
 
       - name: Build with GoReleaser
         uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29 # v7.0.0
@@ -175,10 +173,14 @@ jobs:
 
       - name: Upload artifacts to draft release
         run: |
+          shopt -s nullglob
+          files=(dist/*.tar.gz dist/*.zip dist/checksums.txt)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::No artifacts found in dist/ to upload"
+            exit 1
+          fi
           gh release upload "${{ needs.create_release.outputs.full-tag }}" \
-            dist/*.tar.gz \
-            dist/*.zip \
-            dist/checksums.txt \
+            "${files[@]}" \
             --clobber
         env:
           GH_TOKEN: ${{ secrets.github-token }}
@@ -232,6 +234,7 @@ jobs:
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ needs.create_release.outputs.full-tag }}
           persist-credentials: false
 
       - name: Set up Docker Buildx
@@ -298,20 +301,18 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Validate discussion repository ID
-        if: ${{ env.DISCUSSION_REPOSITORY_ID == '' }}
+      - name: Check discussion inputs
+        id: check-inputs
         run: |
-          echo "::notice::discussion-repository-id secret is not set, skipping discussion creation"
-          exit 0
-
-      - name: Validate discussion category ID
-        if: ${{ env.DISCUSSION_CATEGORY_ID == '' }}
-        run: |
-          echo "::notice::discussion-category-id secret is not set, skipping discussion creation"
-          exit 0
+          if [ -z "${DISCUSSION_REPOSITORY_ID}" ] || [ -z "${DISCUSSION_CATEGORY_ID}" ]; then
+            echo "::notice::discussion-repository-id and/or discussion-category-id secrets are not set, skipping discussion creation"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Create an Announcement Discussion for Release
-        if: ${{ env.DISCUSSION_REPOSITORY_ID != '' && env.DISCUSSION_CATEGORY_ID != '' }}
+        if: ${{ steps.check-inputs.outputs.skip == 'false' }}
         uses: abirismyname/create-discussion@c2b7c825241769dda523865ae444a879f6bbd0e0
         with:
           title: ${{ needs.create_release.outputs.full-tag }}
@@ -321,12 +322,11 @@ jobs:
           github-token: ${{ secrets.github-token }}
 
   publish_release:
-    needs: [create_release, update_major_tag, release_goreleaser, release_image, release_discussion]
+    needs: [create_release, release_goreleaser, release_image, release_discussion]
     if: >
       always() &&
       inputs.publish &&
       needs.create_release.result == 'success' &&
-      (needs.update_major_tag.result == 'success' || needs.update_major_tag.result == 'skipped') &&
       (needs.release_goreleaser.result == 'success' || needs.release_goreleaser.result == 'skipped') &&
       (needs.release_image.result == 'success' || needs.release_image.result == 'skipped') &&
       (needs.release_discussion.result == 'success' || needs.release_discussion.result == 'skipped')
@@ -344,6 +344,6 @@ jobs:
           gh api \
             --method PATCH \
             "/repos/${{ github.repository }}/releases/${{ needs.create_release.outputs.release-id }}" \
-            -f draft=false
+            -F draft=false
         env:
           GH_TOKEN: ${{ secrets.github-token }}

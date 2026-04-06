@@ -20,13 +20,13 @@ Consolidated release workflow that creates a draft release, optionally builds ar
     # The name of the configuration file to use
     # from the release-drafter/release-drafter GitHub Action
     release-config-name: release-drafter.yml
-    # Boolean flag whether to update major tag to latest full semver tag, default is true
-    update-major-tag: true
 
     # --- Optional: GoReleaser build/upload ---
     # Setting goreleaser-config-path enables the GoReleaser job
     # Path to GoReleaser config file (e.g., .goreleaser.yaml)
     goreleaser-config-path: .goreleaser.yaml
+    # Path to go.mod or go.work file for Go version detection, default is go.mod
+    go-version-file: go.mod
 
     # --- Optional: Docker image build/push ---
     # Setting image-name enables the image build/push job
@@ -78,12 +78,25 @@ jobs:
 
 The workflow runs up to six jobs:
 
-1. **create_release** - Always runs. Creates a draft release via release-drafter.
-2. **update_major_tag** - Runs when `update-major-tag` is true. Force-updates the major version tag.
-3. **release_goreleaser** - Runs when `goreleaser-config-path` is set. Builds Go binaries, uploads artifacts to the draft release, and optionally creates attestations.
-4. **release_image** - Runs when `image-name` is set. Builds and pushes a multi-platform Docker image, and optionally creates attestations.
-5. **release_discussion** - Runs when both `discussion-category-id` and `discussion-repository-id` secrets are set. Creates a GitHub Discussions announcement.
-6. **publish_release** - Runs when `publish` is true and all preceding jobs succeed (or are skipped). Publishes the draft release.
+1. **create_release** - Always runs. Creates a draft release via release-drafter, then creates and pushes the full and major version git tags.
+2. **release_goreleaser** - Runs when `goreleaser-config-path` is set. Builds Go binaries, uploads artifacts to the draft release, and optionally creates attestations.
+3. **release_image** - Runs when `image-name` is set. Builds and pushes a multi-platform Docker image, and optionally creates attestations.
+4. **release_discussion** - Runs when both `discussion-category-id` and `discussion-repository-id` secrets are set. Creates a GitHub Discussions announcement.
+5. **publish_release** - Runs when `publish` is true and all preceding jobs succeed (or are skipped). Publishes the draft release.
+
+## GoReleaser Configuration
+
+When using the `goreleaser-config-path` input, your GoReleaser config **must** disable release and changelog management since this workflow handles both via release-drafter:
+
+```yaml
+release:
+  disable: true
+
+changelog:
+  disable: true
+```
+
+Without these settings, GoReleaser will attempt to create its own GitHub release, conflicting with the draft release created by release-drafter.
 
 ## Notes
 
