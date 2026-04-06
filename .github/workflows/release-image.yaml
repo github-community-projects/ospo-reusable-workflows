@@ -1,0 +1,41 @@
+---
+name: "Release Image (Deprecated)"
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        required: true
+        type: string
+      full-tag:
+        required: true
+        type: string
+      short-tag:
+        required: true
+        type: string
+      create-attestation:
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      github-token:
+        required: true
+      image-registry:
+        required: true
+      image-registry-username:
+        required: true
+      image-registry-password:
+        required: true
+
+permissions: {}
+
+jobs:
+  deprecated:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Deprecation notice
+        run: |
+          echo "::error::This workflow (release-image.yaml) has been deprecated and consolidated into release.yaml."
+          echo "::error::Migrate to the consolidated release workflow by setting the 'image-name' input on release.yaml instead."
+          echo "::error::See migration guide: https://github.com/github-community-projects/ospo-reusable-workflows/blob/main/docs/release-image.md"
+          exit 1

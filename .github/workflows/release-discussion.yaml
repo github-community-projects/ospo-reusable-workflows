@@ -1,0 +1,32 @@
+---
+name: "Release Discussion (Deprecated)"
+on:
+  workflow_call:
+    inputs:
+      full-tag:
+        required: true
+        type: string
+      body:
+        required: true
+        type: string
+    secrets:
+      github-token:
+        required: true
+      discussion-repository-id:
+        required: true
+      discussion-category-id:
+        required: true
+
+permissions: {}
+
+jobs:
+  deprecated:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Deprecation notice
+        run: |
+          echo "::error::This workflow (release-discussion.yaml) has been deprecated and consolidated into release.yaml."
+          echo "::error::Migrate to the consolidated release workflow by setting the 'discussion-category-id' and 'discussion-repository-id' secrets on release.yaml instead."
+          echo "::error::See migration guide: https://github.com/github-community-projects/ospo-reusable-workflows/blob/main/docs/release-discussion.md"
+          exit 1
