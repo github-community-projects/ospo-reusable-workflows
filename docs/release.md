@@ -1,6 +1,6 @@
 # Release Reusable Workflow
 
-Consolidated release workflow that handles creating releases, optionally building/pushing Docker images, and optionally creating GitHub Discussions announcements.
+Consolidated release workflow that creates a draft release, optionally builds artifacts (GoReleaser, Docker images), creates GitHub Discussions announcements, and publishes the release after all jobs succeed. This draft-first pattern supports repositories with immutable releases enabled.
 
 ## Inputs
 
@@ -14,13 +14,19 @@ Consolidated release workflow that handles creating releases, optionally buildin
     attestations: write   # only needed if creating attestations
     discussions: write    # only needed if creating discussions
   with:
-    # Boolean flag whether to publish the release, default is true
+    # Publish the release after all jobs complete. When false, the release
+    # remains a draft for manual review. Default is true.
     publish: true
     # The name of the configuration file to use
     # from the release-drafter/release-drafter GitHub Action
     release-config-name: release-drafter.yml
     # Boolean flag whether to update major tag to latest full semver tag, default is true
     update-major-tag: true
+
+    # --- Optional: GoReleaser build/upload ---
+    # Setting goreleaser-config-path enables the GoReleaser job
+    # Path to GoReleaser config file (e.g., .goreleaser.yaml)
+    goreleaser-config-path: .goreleaser.yaml
 
     # --- Optional: Docker image build/push ---
     # Setting image-name enables the image build/push job
@@ -32,7 +38,9 @@ Consolidated release workflow that handles creating releases, optionally buildin
     image-registry-username: ${{ github.actor }}
     # Comma-separated list of target platforms, default is linux/amd64,linux/arm64
     image-platforms: linux/amd64,linux/arm64
-    # Flag to create a build provenance attestation, default is false
+    # Flag to create build provenance attestations, default is false
+    # Attestation is only available for public repositories. Private repos
+    # will see a warning and skip attestation automatically.
     create-attestation: true
 
   secrets:
@@ -68,16 +76,20 @@ jobs:
 
 ## Jobs
 
-The workflow runs up to four jobs:
+The workflow runs up to six jobs:
 
-1. **create_release** - Always runs. Creates a release via release-drafter.
+1. **create_release** - Always runs. Creates a draft release via release-drafter.
 2. **update_major_tag** - Runs when `update-major-tag` is true. Force-updates the major version tag.
-3. **release_image** - Runs when `image-name` is set. Builds and pushes a multi-platform Docker image.
-4. **release_discussion** - Runs when both `discussion-category-id` and `discussion-repository-id` are set. Creates a GitHub Discussions announcement.
+3. **release_goreleaser** - Runs when `goreleaser-config-path` is set. Builds Go binaries, uploads artifacts to the draft release, and optionally creates attestations.
+4. **release_image** - Runs when `image-name` is set. Builds and pushes a multi-platform Docker image, and optionally creates attestations.
+5. **release_discussion** - Runs when both `discussion-category-id` and `discussion-repository-id` secrets are set. Creates a GitHub Discussions announcement.
+6. **publish_release** - Runs when `publish` is true and all preceding jobs succeed (or are skipped). Publishes the draft release.
 
 ## Notes
 
-To get the discussion repository ID and category ID, use the GitHub GraphQL API Explorer: https://docs.github.com/en/graphql/overview/explorer with the following query (replace `OWNER` and `REPO` with the appropriate values):
+- The draft-first pattern supports repositories with **immutable releases** enabled. The release is created as a draft, artifacts are uploaded, and only then is it published.
+- Artifact attestation requires a **public repository**. Private user-owned or organization repositories on free plans will see a warning and skip attestation automatically.
+- To get the discussion repository ID and category ID, use the GitHub GraphQL API Explorer: https://docs.github.com/en/graphql/overview/explorer with the following query (replace `OWNER` and `REPO` with the appropriate values):
 
 ```graphql
 query {
