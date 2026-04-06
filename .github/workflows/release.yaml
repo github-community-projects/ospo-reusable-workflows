@@ -114,9 +114,9 @@ jobs:
           echo "SHORT_TAG=$short_tag" >> "$GITHUB_OUTPUT"
       - name: Create and push tags
         run: |
-          git tag "${{ steps.release-drafter.outputs.tag_name }}"
+          git tag -f "${{ steps.release-drafter.outputs.tag_name }}"
           git tag -f "${{ steps.get_tag_name.outputs.SHORT_TAG }}" "${{ steps.release-drafter.outputs.tag_name }}"
-          git push origin "${{ steps.release-drafter.outputs.tag_name }}"
+          git push -f origin "${{ steps.release-drafter.outputs.tag_name }}"
           git push -f origin "${{ steps.get_tag_name.outputs.SHORT_TAG }}"
 
   release_goreleaser:
@@ -287,7 +287,7 @@ jobs:
 
   release_discussion:
     needs: create_release
-    if: ${{ needs.create_release.outputs.full-tag != '' }}
+    if: ${{ inputs.publish && needs.create_release.outputs.full-tag != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read # Required by harden-runner
