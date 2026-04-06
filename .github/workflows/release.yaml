@@ -14,9 +14,40 @@ on:
         required: false
         type: boolean
         default: true
+      image-name:
+        description: "Docker image name (e.g., owner/repo). Enables image build/push when set."
+        required: false
+        type: string
+        default: ""
+      create-attestation:
+        description: "Create build provenance attestation for the Docker image."
+        required: false
+        type: boolean
+        default: false
+      image-registry:
+        description: "Container registry URL."
+        required: false
+        type: string
+        default: "ghcr.io"
+      image-registry-username:
+        description: "Container registry username."
+        required: false
+        type: string
+        default: ""
+      image-platforms:
+        description: "Comma-separated list of target platforms for Docker build."
+        required: false
+        type: string
+        default: "linux/amd64,linux/arm64"
     secrets:
       github-token:
         required: true
+      image-registry-password:
+        required: false
+      discussion-category-id:
+        required: false
+      discussion-repository-id:
+        required: false
     outputs:
       full-tag:
         description: "Full tag of release"
@@ -27,8 +58,9 @@ on:
       body:
         description: "Body content of release"
         value: ${{ jobs.create_release.outputs.body }}
-permissions:
-  contents: read
+
+permissions: {}
+
 jobs:
   create_release:
     # Release if:
@@ -48,8 +80,8 @@ jobs:
       body: ${{ steps.release-drafter.outputs.body }}
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: read
+      contents: write # Create releases via release-drafter
+      pull-requests: read # Read PR labels for release-drafter
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
@@ -72,7 +104,7 @@ jobs:
     if: ${{ inputs.update-major-tag && needs.create_release.outputs.full-tag != '' }}
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # Force-push major version tag
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
@@ -84,7 +116,7 @@ jobs:
         with:
           fetch-tags: true
           ref: ${{ needs.create_release.outputs.full-tag }}
-          persist-credentials: true
+          persist-credentials: true # Required for git push
 
       - name: Force update major tag
         run: |
@@ -93,3 +125,104 @@ jobs:
         env:
           SHORT: ${{ needs.create_release.outputs.short-tag }}
           FULL: ${{ needs.create_release.outputs.full-tag }}
+
+  release_image:
+    needs: create_release
+    if: ${{ inputs.image-name != '' && needs.create_release.outputs.full-tag != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Clone the repository
+      packages: write # Push container images
+      id-token: write # Federate via Workload Identity for attestation
+      attestations: write # Create build provenance attestation
+    env:
+      IMAGE_REGISTRY: ${{ inputs.image-registry }}
+      IMAGE_REGISTRY_USERNAME: ${{ inputs.image-registry-username || github.actor }}
+      IMAGE_REGISTRY_PASSWORD: ${{ secrets.image-registry-password }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - name: Validate image registry password
+        if: ${{ env.IMAGE_REGISTRY_PASSWORD == '' }}
+        run: |
+          echo "::error::image-registry-password secret is required when image-name is set"
+          exit 1
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
+        with:
+          registry: ${{ env.IMAGE_REGISTRY }}
+          username: ${{ env.IMAGE_REGISTRY_USERNAME }}
+          password: ${{ env.IMAGE_REGISTRY_PASSWORD }}
+
+      - name: Push Docker Image
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294
+        id: push
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_REGISTRY }}/${{ inputs.image-name }}:latest
+            ${{ env.IMAGE_REGISTRY }}/${{ inputs.image-name }}:${{ needs.create_release.outputs.full-tag }}
+            ${{ env.IMAGE_REGISTRY }}/${{ inputs.image-name }}:${{ needs.create_release.outputs.short-tag }}
+          platforms: ${{ inputs.image-platforms }}
+          provenance: false
+          sbom: false
+
+      - name: Generate artifact attestation
+        if: ${{ inputs.create-attestation }}
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-name: ${{ env.IMAGE_REGISTRY }}/${{ inputs.image-name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+          github-token: ${{ secrets.github-token }}
+
+  release_discussion:
+    needs: create_release
+    if: ${{ needs.create_release.outputs.full-tag != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Required by harden-runner
+      discussions: write # Create announcement discussions
+    env:
+      DISCUSSION_REPOSITORY_ID: ${{ secrets.discussion-repository-id }}
+      DISCUSSION_CATEGORY_ID: ${{ secrets.discussion-category-id }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - name: Validate discussion repository ID
+        if: ${{ env.DISCUSSION_REPOSITORY_ID == '' }}
+        run: |
+          echo "::notice::discussion-repository-id secret is not set, skipping discussion creation"
+          exit 0
+
+      - name: Validate discussion category ID
+        if: ${{ env.DISCUSSION_CATEGORY_ID == '' }}
+        run: |
+          echo "::notice::discussion-category-id secret is not set, skipping discussion creation"
+          exit 0
+
+      - name: Create an Announcement Discussion for Release
+        if: ${{ env.DISCUSSION_REPOSITORY_ID != '' && env.DISCUSSION_CATEGORY_ID != '' }}
+        uses: abirismyname/create-discussion@c2b7c825241769dda523865ae444a879f6bbd0e0
+        with:
+          title: ${{ needs.create_release.outputs.full-tag }}
+          body: ${{ needs.create_release.outputs.body }}
+          repository-id: ${{ env.DISCUSSION_REPOSITORY_ID }}
+          category-id: ${{ env.DISCUSSION_CATEGORY_ID }}
+          github-token: ${{ secrets.github-token }}
