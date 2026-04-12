@@ -287,7 +287,7 @@ jobs:
 
   release_discussion:
     needs: create_release
-    if: ${{ inputs.publish && needs.create_release.outputs.full-tag != '' }}
+    if: ${{ secrets.discussion-repository-id && secrest.discussion-category-id && inputs.publish && needs.create_release.outputs.full-tag != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read # Required by harden-runner
@@ -300,16 +300,6 @@ jobs:
         uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
         with:
           egress-policy: audit
-
-      - name: Check discussion inputs
-        id: check-inputs
-        run: |
-          if [ -z "${DISCUSSION_REPOSITORY_ID}" ] || [ -z "${DISCUSSION_CATEGORY_ID}" ]; then
-            echo "::notice::discussion-repository-id and/or discussion-category-id secrets are not set, skipping discussion creation"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Create an Announcement Discussion for Release
         if: ${{ steps.check-inputs.outputs.skip == 'false' }}
