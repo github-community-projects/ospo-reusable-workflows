@@ -1,5 +1,5 @@
 ---
-name: "Release Image"
+name: "Release Image (Deprecated)"
 on:
   workflow_call:
     inputs:
@@ -25,56 +25,17 @@ on:
         required: true
       image-registry-password:
         required: true
-permissions:
-  contents: read
+
+permissions: {}
+
 jobs:
-  create_action_images:
+  deprecated:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-    env:
-      IMAGE_REGISTRY: ${{ secrets.image-registry }}
-      IMAGE_REGISTRY_USERNAME: ${{ secrets.image-registry-username }}
-      IMAGE_REGISTRY_PASSWORD: ${{ secrets.image-registry-password }}
+    permissions: {}
     steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
-      - name: Log in to the Container registry
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
-        with:
-          registry: ${{ env.IMAGE_REGISTRY }}
-          username: ${{ env.IMAGE_REGISTRY_USERNAME }}
-          password: ${{ env.IMAGE_REGISTRY_PASSWORD}}
-      - name: Push Docker Image
-        if: ${{ success() }}
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f
-        id: push
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: |
-            ${{ env.IMAGE_REGISTRY }}/${{ inputs.image-name }}:latest
-            ${{ env.IMAGE_REGISTRY }}/${{ inputs.image-name }}:${{ inputs.full-tag }}
-            ${{ env.IMAGE_REGISTRY }}/${{ inputs.image-name }}:${{ inputs.short-tag }}
-          platforms: linux/amd64,linux/arm64
-          provenance: false
-          sbom: false
-      - name: Generate artifact attestation
-        if: ${{ inputs.create-attestation }}
-        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
-        with:
-          subject-name: ${{ env.IMAGE_REGISTRY }}/${{ inputs.image-name}}
-          subject-digest: ${{ steps.push.outputs.digest }}
-          push-to-registry: true
-          github-token: ${{ secrets.github-token }}
+      - name: Deprecation notice
+        run: |
+          echo "::error::This workflow (release-image.yaml) has been deprecated and consolidated into release.yaml."
+          echo "::error::Migrate to the consolidated release workflow by setting the 'image-name' input on release.yaml instead."
+          echo "::error::See migration guide: https://github.com/github-community-projects/ospo-reusable-workflows/blob/main/docs/release-image.md"
+          exit 1

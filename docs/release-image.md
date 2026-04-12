@@ -1,34 +1,48 @@
 # Release Image Reusable Workflow
 
-## Inputs
+> [!CAUTION]
+> This workflow has been deprecated and consolidated into the [Release workflow](release.md). Calling `release-image.yaml` directly will fail with an error. Migrate by setting the `image-name` input on `release.yaml` instead.
+
+## Migration
+
+Replace your existing `release-image.yaml` call:
 
 ```yaml
-- uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-image.yaml@main
-  permissions:
-    contents: read
-    packages: write
-    id-token: write
-    attestations: write
+# Before (deprecated)
+release_image:
+  needs: release
+  uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-image.yaml@main
   with:
-    # Image name, usually owner/repository (github-community-projects/ospo-reusable-workflows)
     image-name: ${{ github.repository }}
-    # Full tag of the image, usually the version (v1.0.0)
-    full-tag: v1.0.0
-    # Short tag of the image, usually the major version (v1)
-    short-tag: v1
-    # Flag to create an attestation
+    full-tag: ${{ needs.release.outputs.full-tag }}
+    short-tag: ${{ needs.release.outputs.short-tag }}
     create-attestation: true
   secrets:
-    # The GitHub token to use
     github-token: ${{ secrets.GITHUB_TOKEN }}
-    # Image repository url
-    image-registry: ${{ secrets.IMAGE_REPOSITORY_URL }}
-    # Image repository username
-    image-registry-username: ${{ secrets.IMAGE_REPOSITORY_USERNAME }}
-    # Image repository password
-    image-registry-password: ${{ secrets.IMAGE_REPOSITORY_PASSWORD }}
+    image-registry: ghcr.io
+    image-registry-username: ${{ github.actor }}
+    image-registry-password: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-## Outputs
+With the consolidated `release.yaml` inputs:
 
-None
+```yaml
+# After
+release:
+  uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release.yaml@main
+  with:
+    release-config-name: release-drafter.yaml
+    image-name: ${{ github.repository }}
+    create-attestation: true
+  secrets:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    image-registry-password: ${{ secrets.GITHUB_TOKEN }}
+```
+
+Key changes:
+- `full-tag` and `short-tag` no longer need to be passed — they are handled internally
+- `image-registry` defaults to `ghcr.io`
+- `image-registry-username` defaults to `github.actor`
+- Registry credentials moved from required secrets to optional (with defaults)
+
+See the full [Release workflow documentation](release.md) for all available inputs.

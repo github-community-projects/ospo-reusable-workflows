@@ -4,19 +4,62 @@ on:
   workflow_call:
     inputs:
       publish:
+        description: "Publish the release after all jobs complete. When false, the release remains a draft."
         required: false
         type: boolean
         default: true
       release-config-name:
         required: true
         type: string
-      update-major-tag:
+      image-name:
+        description: "Docker image name (e.g., owner/repo). Enables image build/push when set."
+        required: false
+        type: string
+        default: ""
+      create-attestation:
+        description: "Create build provenance attestation for artifacts and/or Docker images."
         required: false
         type: boolean
-        default: true
+        default: false
+      create-discussion:
+        description: "Create discussion about release"
+        required: false
+        type: boolean
+        default: false
+      image-registry:
+        description: "Container registry URL."
+        required: false
+        type: string
+        default: "ghcr.io"
+      image-registry-username:
+        description: "Container registry username."
+        required: false
+        type: string
+        default: ""
+      image-platforms:
+        description: "Comma-separated list of target platforms for Docker build."
+        required: false
+        type: string
+        default: "linux/amd64,linux/arm64"
+      goreleaser-config-path:
+        description: "Path to GoReleaser config file. Enables GoReleaser build/upload when set."
+        required: false
+        type: string
+        default: ""
+      go-version-file:
+        description: "Path to go.mod or go.work file for Go version detection. Used by the GoReleaser job."
+        required: false
+        type: string
+        default: "go.mod"
     secrets:
       github-token:
         required: true
+      image-registry-password:
+        required: false
+      discussion-category-id:
+        required: false
+      discussion-repository-id:
+        required: false
     outputs:
       full-tag:
         description: "Full tag of release"
@@ -27,8 +70,9 @@ on:
       body:
         description: "Body content of release"
         value: ${{ jobs.create_release.outputs.body }}
-permissions:
-  contents: read
+
+permissions: {}
+
 jobs:
   create_release:
     # Release if:
@@ -46,50 +90,284 @@ jobs:
       full-tag: ${{ steps.release-drafter.outputs.tag_name }}
       short-tag: ${{ steps.get_tag_name.outputs.SHORT_TAG }}
       body: ${{ steps.release-drafter.outputs.body }}
+      release-id: ${{ steps.release-drafter.outputs.id }}
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: read
+      contents: write # Create draft release via release-drafter
+      pull-requests: read # Read PR labels for release-drafter
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
         with:
           egress-policy: audit
-      - uses: release-drafter/release-drafter@5de93583980a40bd78603b6dfdcda5b4df377b32 # v7.2.0
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: true # Required for git push of tags
+      - name: Draft release
         id: release-drafter
+        uses: release-drafter/release-drafter@5de93583980a40bd78603b6dfdcda5b4df377b32 # v7.2.0
         with:
           config-name: ${{ inputs.release-config-name }}
-          publish: ${{ inputs.publish }}
+          publish: false
           token: ${{ secrets.github-token }}
       - name: Get the Short Tag
         id: get_tag_name
         run: |
-          short_tag=$(echo ${{ steps.release-drafter.outputs.tag_name }} | cut -d. -f1)
+          short_tag=$(echo "${{ steps.release-drafter.outputs.tag_name }}" | cut -d. -f1)
           echo "SHORT_TAG=$short_tag" >> "$GITHUB_OUTPUT"
+      - name: Create and push tags
+        run: |
+          git tag -f "${{ steps.release-drafter.outputs.tag_name }}"
+          git tag -f "${{ steps.get_tag_name.outputs.SHORT_TAG }}" "${{ steps.release-drafter.outputs.tag_name }}"
+          git push -f origin "${{ steps.release-drafter.outputs.tag_name }}"
+          git push -f origin "${{ steps.get_tag_name.outputs.SHORT_TAG }}"
 
-  update_major_tag:
+  release_goreleaser:
     needs: create_release
-    if: ${{ inputs.update-major-tag && needs.create_release.outputs.full-tag != '' }}
+    if: ${{ inputs.goreleaser-config-path != '' && needs.create_release.outputs.full-tag != '' }}
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # Upload release assets
+      id-token: write # Federate for artifact attestation
+      attestations: write # Generate artifact attestations
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
         with:
           egress-policy: audit
 
-      - name: Checkout Repo
+      - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          fetch-tags: true
-          ref: ${{ needs.create_release.outputs.full-tag }}
-          persist-credentials: true
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Force update major tag
+      - name: Install yq
+        uses: mikefarah/yq@0f4fb8d35ec1a939d78dd6862f494d19ec589f19 # v4.52.5
+        with:
+          cmd: echo "yq installed"
+
+      - name: Validate GoReleaser config has release disabled
         run: |
-          git tag -f "${SHORT}" "${FULL}"
-          git push -f origin "${SHORT}"
+          config="${{ inputs.goreleaser-config-path }}"
+          if ! [ -f "$config" ]; then
+            echo "::error::GoReleaser config file not found: $config"
+            exit 1
+          fi
+          release_disabled=$(yq '.release.disable' "$config")
+          if [ "$release_disabled" != "true" ]; then
+            echo "::error::GoReleaser config must have 'release: disable: true' to prevent conflicting with the draft release created by this workflow. See https://github.com/github-community-projects/ospo-reusable-workflows/blob/main/docs/release.md#goreleaser-configuration"
+            exit 1
+          fi
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: ${{ inputs.go-version-file }}
+
+      - name: Build with GoReleaser
+        uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29 # v7.0.0
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean --config ${{ inputs.goreleaser-config-path }}
         env:
-          SHORT: ${{ needs.create_release.outputs.short-tag }}
-          FULL: ${{ needs.create_release.outputs.full-tag }}
+          GORELEASER_CURRENT_TAG: ${{ needs.create_release.outputs.full-tag }}
+
+      - name: Upload artifacts to draft release
+        run: |
+          shopt -s nullglob
+          files=(dist/*.tar.gz dist/*.zip dist/checksums.txt)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::No artifacts found in dist/ to upload"
+            exit 1
+          fi
+          gh release upload "${{ needs.create_release.outputs.full-tag }}" \
+            "${files[@]}" \
+            --clobber
+        env:
+          GH_TOKEN: ${{ secrets.github-token }}
+
+      - name: Check repository visibility
+        id: repo-visibility
+        run: |
+          visibility=$(gh api "repos/${{ github.repository }}" --jq '.visibility')
+          echo "is_public=$( [ "$visibility" = "public" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.github-token }}
+
+      - name: Generate artifact attestation
+        if: ${{ inputs.create-attestation && steps.repo-visibility.outputs.is_public == 'true' }}
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+
+      - name: Skip attestation notice
+        if: ${{ inputs.create-attestation && steps.repo-visibility.outputs.is_public != 'true' }}
+        run: |
+          echo "::warning::Artifact attestation skipped — not available for private user-owned repositories. Make this repository public to enable attestation."
+
+  release_image:
+    needs: create_release
+    if: ${{ inputs.image-name != '' && needs.create_release.outputs.full-tag != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Clone the repository
+      packages: write # Push container images
+      id-token: write # Federate via Workload Identity for attestation
+      attestations: write # Create build provenance attestation
+    env:
+      IMAGE_REGISTRY: ${{ inputs.image-registry }}
+      IMAGE_REGISTRY_USERNAME: ${{ inputs.image-registry-username || github.actor }}
+      IMAGE_REGISTRY_PASSWORD: ${{ secrets.image-registry-password }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - name: Validate image registry password
+        if: ${{ env.IMAGE_REGISTRY_PASSWORD == '' }}
+        run: |
+          echo "::error::image-registry-password secret is required when image-name is set"
+          exit 1
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.create_release.outputs.full-tag }}
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
+        with:
+          registry: ${{ env.IMAGE_REGISTRY }}
+          username: ${{ env.IMAGE_REGISTRY_USERNAME }}
+          password: ${{ env.IMAGE_REGISTRY_PASSWORD }}
+
+      - name: Push Docker Image
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294
+        id: push
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_REGISTRY }}/${{ inputs.image-name }}:latest
+            ${{ env.IMAGE_REGISTRY }}/${{ inputs.image-name }}:${{ needs.create_release.outputs.full-tag }}
+            ${{ env.IMAGE_REGISTRY }}/${{ inputs.image-name }}:${{ needs.create_release.outputs.short-tag }}
+          platforms: ${{ inputs.image-platforms }}
+          provenance: false
+          sbom: false
+
+      - name: Check repository visibility
+        if: ${{ inputs.create-attestation }}
+        id: repo-visibility
+        run: |
+          visibility=$(gh api "repos/${{ github.repository }}" --jq '.visibility')
+          echo "is_public=$( [ "$visibility" = "public" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.github-token }}
+
+      - name: Generate artifact attestation
+        if: ${{ inputs.create-attestation && steps.repo-visibility.outputs.is_public == 'true' }}
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-name: ${{ env.IMAGE_REGISTRY }}/${{ inputs.image-name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+          github-token: ${{ secrets.github-token }}
+
+      - name: Skip attestation notice
+        if: ${{ inputs.create-attestation && steps.repo-visibility.outputs.is_public != 'true' }}
+        run: |
+          echo "::warning::Artifact attestation skipped — not available for private user-owned repositories. Make this repository public to enable attestation."
+
+  release_discussion:
+    needs: create_release
+    if: ${{ inputs.create-discussion && inputs.publish && needs.create_release.outputs.full-tag != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Required by harden-runner
+      discussions: write # Create announcement discussions
+    env:
+      DISCUSSION_REPOSITORY_ID: ${{ secrets.discussion-repository-id }}
+      DISCUSSION_CATEGORY_ID: ${{ secrets.discussion-category-id }}
+    steps:
+      - name: Validate discussion prerequisites
+        id: check-inputs
+        env:
+          GH_TOKEN: ${{ secrets.github-token }}
+        run: |
+          if [ -z "${DISCUSSION_REPOSITORY_ID}" ] || [ -z "${DISCUSSION_CATEGORY_ID}" ]; then
+            echo "::notice::discussion-repository-id and/or discussion-category-id secrets are not set, skipping discussion creation"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          has_discussions=$(gh api graphql -f query="
+            query(\$id: ID!) {
+              node(id: \$id) {
+                ... on Repository {
+                  hasDiscussionsEnabled
+                }
+              }
+            }
+          " -f id="${DISCUSSION_REPOSITORY_ID}" --jq '.data.node.hasDiscussionsEnabled')
+
+          if [ "$has_discussions" != "true" ]; then
+            echo "::notice::Discussions are not enabled on the target repository, skipping discussion creation"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Harden the runner (Audit all outbound calls)
+        if: ${{ steps.check-inputs.outputs.skip == 'false' }}
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - name: Create an Announcement Discussion for Release
+        if: ${{ steps.check-inputs.outputs.skip == 'false' }}
+        uses: abirismyname/create-discussion@c2b7c825241769dda523865ae444a879f6bbd0e0
+        with:
+          title: ${{ needs.create_release.outputs.full-tag }}
+          body: ${{ needs.create_release.outputs.body }}
+          repository-id: ${{ env.DISCUSSION_REPOSITORY_ID }}
+          category-id: ${{ env.DISCUSSION_CATEGORY_ID }}
+          github-token: ${{ secrets.github-token }}
+
+  publish_release:
+    needs: [create_release, release_goreleaser, release_image, release_discussion]
+    if: >
+      always() &&
+      inputs.publish &&
+      needs.create_release.result == 'success' &&
+      (needs.release_goreleaser.result == 'success' || needs.release_goreleaser.result == 'skipped') &&
+      (needs.release_image.result == 'success' || needs.release_image.result == 'skipped') &&
+      (needs.release_discussion.result == 'success' || needs.release_discussion.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Publish draft release
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - name: Publish draft release
+        run: |
+          gh api \
+            --method PATCH \
+            "/repos/${{ github.repository }}/releases/${{ needs.create_release.outputs.release-id }}" \
+            -F draft=false
+        env:
+          GH_TOKEN: ${{ secrets.github-token }}

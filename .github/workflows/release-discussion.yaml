@@ -1,5 +1,5 @@
 ---
-name: "Release Discussion"
+name: "Release Discussion (Deprecated)"
 on:
   workflow_call:
     inputs:
@@ -16,37 +16,17 @@ on:
         required: true
       discussion-category-id:
         required: true
-permissions:
-  contents: read
+
+permissions: {}
+
 jobs:
-  create_discussion:
+  deprecated:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      discussions: write
-    env:
-      DISCUSSION_REPOSITORY_ID: ${{ secrets.discussion-repository-id }}
-      DISCUSSION_CATEGORY_ID: ${{ secrets.discussion-category-id }}
+    permissions: {}
     steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
-        with:
-          egress-policy: audit
-      - name: Check for Discussion Repository ID
-        if: ${{ env.DISCUSSION_REPOSITORY_ID  == '' }}
+      - name: Deprecation notice
         run: |
-          echo "discussion-repository-id secret is not set"
+          echo "::error::This workflow (release-discussion.yaml) has been deprecated and consolidated into release.yaml."
+          echo "::error::Migrate to the consolidated release workflow by setting the 'discussion-category-id' and 'discussion-repository-id' secrets on release.yaml instead."
+          echo "::error::See migration guide: https://github.com/github-community-projects/ospo-reusable-workflows/blob/main/docs/release-discussion.md"
           exit 1
-      - name: Check for Discussion Category ID
-        if: ${{ env.DISCUSSION_CATEGORY_ID == '' }}
-        run: |
-          echo "discussion-category-id secret is not set"
-          exit 1
-      - name: Create an Announcement Discussion for Release
-        uses: abirismyname/create-discussion@c2b7c825241769dda523865ae444a879f6bbd0e0
-        with:
-          title: ${{ inputs.full-tag }}
-          body: ${{ inputs.body }}
-          repository-id: ${{ env.DISCUSSION_REPOSITORY_ID }}
-          category-id: ${{ env.DISCUSSION_CATEGORY_ID }}
-          github-token: ${{ secrets.github-token }}
