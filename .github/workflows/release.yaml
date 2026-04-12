@@ -301,12 +301,6 @@ jobs:
       DISCUSSION_REPOSITORY_ID: ${{ secrets.discussion-repository-id }}
       DISCUSSION_CATEGORY_ID: ${{ secrets.discussion-category-id }}
     steps:
-      - name: Harden the runner (Audit all outbound calls)
-        if: ${{ steps.check-inputs.outputs.skip == 'false' }}
-        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
-        with:
-          egress-policy: audit
-
       - name: Check discussion inputs
         id: check-inputs
         run: |
@@ -316,6 +310,12 @@ jobs:
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Harden the runner (Audit all outbound calls)
+        if: ${{ steps.check-inputs.outputs.skip == 'false' }}
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
 
       - name: Create an Announcement Discussion for Release
         if: ${{ steps.check-inputs.outputs.skip == 'false' }}
