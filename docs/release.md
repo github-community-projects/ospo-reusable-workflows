@@ -9,10 +9,10 @@ Consolidated release workflow that creates a draft release, optionally builds ar
   permissions:
     contents: write
     pull-requests: read
-    packages: write       # only needed if building images
-    id-token: write       # only needed if creating attestations
-    attestations: write   # only needed if creating attestations
-    discussions: write    # only needed if creating discussions
+    packages: write
+    id-token: write
+    attestations: write
+    discussions: write
   with:
     # Publish the release after all jobs complete. When false, the release
     # remains a draft for manual review. Default is true.
@@ -42,6 +42,7 @@ Consolidated release workflow that creates a draft release, optionally builds ar
     # Attestation is only available for public repositories. Private repos
     # will see a warning and skip attestation automatically.
     create-attestation: true
+    create-discussion: true
 
   secrets:
     # The GitHub token to use (required)
@@ -81,7 +82,7 @@ The workflow runs up to six jobs:
 1. **create_release** - Always runs. Creates a draft release via release-drafter, then creates and pushes the full and major version git tags.
 2. **release_goreleaser** - Runs when `goreleaser-config-path` is set. Builds Go binaries, uploads artifacts to the draft release, and optionally creates attestations.
 3. **release_image** - Runs when `image-name` is set. Builds and pushes a multi-platform Docker image, and optionally creates attestations.
-4. **release_discussion** - Runs when both `discussion-category-id` and `discussion-repository-id` secrets are set. Creates a GitHub Discussions announcement.
+4. **release_discussion** - Runs when `create-discussion` is set. Both `discussion-category-id` and `discussion-repository-id` secrets are required if so. Creates a GitHub Discussions announcement.
 5. **publish_release** - Runs when `publish` is true and all preceding jobs succeed (or are skipped). Publishes the draft release.
 
 ## GoReleaser Configuration

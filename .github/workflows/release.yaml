@@ -21,6 +21,11 @@ on:
         required: false
         type: boolean
         default: false
+      create-discussion:
+        description: "Create discussion about release"
+        required: false
+        type: boolean
+        default: false
       image-registry:
         description: "Container registry URL."
         required: false
@@ -287,7 +292,7 @@ jobs:
 
   release_discussion:
     needs: create_release
-    if: ${{ inputs.publish && needs.create_release.outputs.full-tag != '' }}
+    if: ${{ inputs.create-discussion && inputs.publish && needs.create_release.outputs.full-tag != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read # Required by harden-runner
