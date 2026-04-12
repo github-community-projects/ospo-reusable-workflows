@@ -103,19 +103,22 @@ Without these settings, GoReleaser will attempt to create its own GitHub release
 
 - The draft-first pattern supports repositories with **immutable releases** enabled. The release is created as a draft, artifacts are uploaded, and only then is it published.
 - Artifact attestation requires a **public repository**. Private user-owned or organization repositories on free plans will see a warning and skip attestation automatically.
-- To get the discussion repository ID and category ID, use the GitHub GraphQL API Explorer: https://docs.github.com/en/graphql/overview/explorer with the following query (replace `OWNER` and `REPO` with the appropriate values):
+- To get the discussion repository ID and category ID, use the GitHub CLI (gh) with the following cli and graphql query (replace `OWNER` and `REPO` with the appropriate values):
+  - Our former suggested way to get this information, The GraphQL API Explorer](https://docs.github.com/en/graphql/guides/using-graphql-clients), was removed on November 11, 2025.
 
-```graphql
-query {
-  repository(owner: "OWNER", name: "REPO") {
-    id
-    discussionCategories(first: 50) {
-      nodes {
-        id
-        name
-        slug
+```
+gh api graphql -f query='                                                                                                                                                        7:57:20
+  query($owner: String!, $repo: String!) {
+    repository(owner: $owner, name: $repo) {
+      id
+      discussionCategories(first: 50) {
+        nodes {
+          id
+          name
+          slug
+        }
       }
     }
   }
-}
+' -f owner='OWNER' -f repo='REPO'
 ```
