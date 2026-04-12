@@ -301,11 +301,29 @@ jobs:
       DISCUSSION_REPOSITORY_ID: ${{ secrets.discussion-repository-id }}
       DISCUSSION_CATEGORY_ID: ${{ secrets.discussion-category-id }}
     steps:
-      - name: Check discussion inputs
+      - name: Validate discussion prerequisites
         id: check-inputs
+        env:
+          GH_TOKEN: ${{ secrets.github-token }}
         run: |
           if [ -z "${DISCUSSION_REPOSITORY_ID}" ] || [ -z "${DISCUSSION_CATEGORY_ID}" ]; then
             echo "::notice::discussion-repository-id and/or discussion-category-id secrets are not set, skipping discussion creation"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          has_discussions=$(gh api graphql -f query="
+            query(\$id: ID!) {
+              node(id: \$id) {
+                ... on Repository {
+                  hasDiscussionsEnabled
+                }
+              }
+            }
+          " -f id="${DISCUSSION_REPOSITORY_ID}" --jq '.data.node.hasDiscussionsEnabled')
+
+          if [ "$has_discussions" != "true" ]; then
+            echo "::notice::Discussions are not enabled on the target repository, skipping discussion creation"
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
