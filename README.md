@@ -1,7 +1,7 @@
 # Reusable Workflows
 
 > [!IMPORTANT]
-> This repository has been transferred from `github/ospo-reusable-workflows` to `github-community-projects/ospo-reusable-workflows`. Please update any references to point to the new location.
+> The Release Image and Release Discussion workflows are now deprecated. The have been consolidated into the Release workflow.
 
 This is a placeholder repo for multiple GitHub Actions we use in open source projects.
 

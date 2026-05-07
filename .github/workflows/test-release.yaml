@@ -9,42 +9,20 @@ on:
 jobs:
   release:
     permissions:
-      contents: write
-      pull-requests: read
+      contents: write # Create releases and push major version tag
+      pull-requests: read # Read PR labels for release-drafter
+      packages: write # Push container images
+      id-token: write # Federate via Workload Identity for attestation
+      attestations: write # Create build provenance attestation
+      discussions: write # Create announcement discussions
     uses: ./.github/workflows/release.yaml
     with:
       publish: true
       release-config-name: release-drafter.yaml
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-  release_image:
-    needs: release
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-    uses: ./.github/workflows/release-image.yaml
-    with:
       image-name: ${{ github.repository }}
-      full-tag: ${{ needs.release.outputs.full-tag }}
-      short-tag: ${{ needs.release.outputs.short-tag }}
       create-attestation: true
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
-      image-registry: ghcr.io
-      image-registry-username: ${{ github.actor }}
       image-registry-password: ${{ secrets.GITHUB_TOKEN }}
-  release_discussion:
-    needs: release
-    permissions:
-      contents: read
-      discussions: write
-    uses: ./.github/workflows/release-discussion.yaml
-    with:
-      full-tag: ${{ needs.release.outputs.full-tag }}
-      body: ${{ needs.release.outputs.body }}
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-      discussion-repository-id: ${{ secrets.DISCUSSION_REPOSITORY_ID }}
       discussion-category-id: ${{ secrets.DISCUSSION_CATEGORY_ID }}
+      discussion-repository-id: ${{ secrets.DISCUSSION_REPOSITORY_ID }}
