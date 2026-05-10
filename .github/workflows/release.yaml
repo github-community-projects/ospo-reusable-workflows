@@ -290,9 +290,35 @@ jobs:
         run: |
           echo "::warning::Artifact attestation skipped — not available for private user-owned repositories. Make this repository public to enable attestation."
 
+  publish_release:
+    needs: [create_release, release_goreleaser, release_image]
+    if: >
+      always() &&
+      inputs.publish &&
+      needs.create_release.result == 'success' &&
+      (needs.release_goreleaser.result == 'success' || needs.release_goreleaser.result == 'skipped') &&
+      (needs.release_image.result == 'success' || needs.release_image.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Publish draft release
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450 # v2.19.1
+        with:
+          egress-policy: audit
+
+      - name: Publish draft release
+        run: |
+          gh api \
+            --method PATCH \
+            "/repos/${{ github.repository }}/releases/${{ needs.create_release.outputs.release-id }}" \
+            -F draft=false
+        env:
+          GH_TOKEN: ${{ secrets.github-token }}
+
   release_discussion:
-    needs: create_release
-    if: ${{ inputs.create-discussion && inputs.publish && needs.create_release.outputs.full-tag != '' }}
+    needs: [create_release, publish_release]
+    if: ${{ inputs.create-discussion && needs.publish_release.result == 'success' && needs.create_release.outputs.full-tag != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read # Required by harden-runner
@@ -344,30 +370,3 @@ jobs:
           repository-id: ${{ env.DISCUSSION_REPOSITORY_ID }}
           category-id: ${{ env.DISCUSSION_CATEGORY_ID }}
           github-token: ${{ secrets.github-token }}
-
-  publish_release:
-    needs: [create_release, release_goreleaser, release_image, release_discussion]
-    if: >
-      always() &&
-      inputs.publish &&
-      needs.create_release.result == 'success' &&
-      (needs.release_goreleaser.result == 'success' || needs.release_goreleaser.result == 'skipped') &&
-      (needs.release_image.result == 'success' || needs.release_image.result == 'skipped') &&
-      (needs.release_discussion.result == 'success' || needs.release_discussion.result == 'skipped')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write # Publish draft release
-    steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450 # v2.19.1
-        with:
-          egress-policy: audit
-
-      - name: Publish draft release
-        run: |
-          gh api \
-            --method PATCH \
-            "/repos/${{ github.repository }}/releases/${{ needs.create_release.outputs.release-id }}" \
-            -F draft=false
-        env:
-          GH_TOKEN: ${{ secrets.github-token }}
