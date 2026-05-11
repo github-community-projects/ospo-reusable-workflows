@@ -1,6 +1,6 @@
 # Release Reusable Workflow
 
-Consolidated release workflow that creates a draft release, optionally builds artifacts (GoReleaser, Docker images), creates GitHub Discussions announcements, and publishes the release after all jobs succeed. This draft-first pattern supports repositories with immutable releases enabled.
+Consolidated release workflow that creates a draft release, optionally builds artifacts (GoReleaser, Docker images), publishes the release after all build jobs succeed, and then creates a GitHub Discussions announcement. This draft-first pattern supports repositories with immutable releases enabled and ensures announcements only fire for releases that publish successfully.
 
 ## Inputs
 
@@ -82,8 +82,8 @@ The workflow runs up to six jobs:
 1. **create_release** - Always runs. Creates a draft release via release-drafter, then creates and pushes the full and major version git tags.
 2. **release_goreleaser** - Runs when `goreleaser-config-path` is set. Builds Go binaries, uploads artifacts to the draft release, and optionally creates attestations.
 3. **release_image** - Runs when `image-name` is set. Builds and pushes a multi-platform Docker image, and optionally creates attestations.
-4. **release_discussion** - Runs when `create-discussion` is set. Both `discussion-category-id` and `discussion-repository-id` secrets are required if so. Creates a GitHub Discussions announcement.
-5. **publish_release** - Runs when `publish` is true and all preceding jobs succeed (or are skipped). Publishes the draft release.
+4. **publish_release** - Runs when `publish` is true and all preceding jobs succeed (or are skipped). Publishes the draft release.
+5. **release_discussion** - Runs after `publish_release` succeeds and when `create-discussion` is set. Both `discussion-category-id` and `discussion-repository-id` secrets are required if so. Creates a GitHub Discussions announcement only after the release is successfully published.
 
 ## GoReleaser Configuration
 
@@ -98,6 +98,10 @@ changelog:
 ```
 
 Without these settings, GoReleaser will attempt to create its own GitHub release, conflicting with the draft release created by release-drafter.
+
+### SBOM generation
+
+If your GoReleaser config includes an `sboms:` block that calls `syft`, the workflow detects it via `yq` and installs syft automatically before running GoReleaser. Generated `*.spdx.json` files are uploaded alongside the archives and included in the build provenance attestation when `create-attestation: true`. No additional configuration is needed beyond declaring `sboms:` in your GoReleaser config.
 
 ## Notes
 

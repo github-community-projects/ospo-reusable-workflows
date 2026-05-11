@@ -31,6 +31,8 @@ jobs:
         ci
         docs
         deps
+        github
+        release
       requireScope: false
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
