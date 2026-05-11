@@ -99,6 +99,10 @@ changelog:
 
 Without these settings, GoReleaser will attempt to create its own GitHub release, conflicting with the draft release created by release-drafter.
 
+### SBOM generation
+
+If your GoReleaser config includes an `sboms:` block that calls `syft`, the workflow detects it via `yq` and installs syft automatically before running GoReleaser. Generated `*.spdx.json` files are uploaded alongside the archives and included in the build provenance attestation when `create-attestation: true`. No additional configuration is needed beyond declaring `sboms:` in your GoReleaser config.
+
 ## Notes
 
 - The draft-first pattern supports repositories with **immutable releases** enabled. The release is created as a draft, artifacts are uploaded, and only then is it published.
