@@ -51,6 +51,11 @@ on:
         required: false
         type: string
         default: "go.mod"
+      release-only-with-label:
+        description: "Only create a release when the 'release' label is present on the PR. When true, other trigger labels (breaking, feature, vuln) are ignored."
+        required: false
+        type: boolean
+        default: false
     secrets:
       github-token:
         required: true
@@ -77,15 +82,19 @@ jobs:
   create_release:
     # Release if:
     # - Manual deployment (workflow_dispatch), OR
-    # - PR was merged with a breaking, feature, vuln, or release label
+    # - release-only-with-label is true and the PR has the 'release' label, OR
+    # - release-only-with-label is false (default) and the PR has a breaking, feature, vuln, or release label
     # Note: major/minor/patch labels alone do NOT trigger a release
     if: >
       github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.merged == true &&
-       (contains(github.event.pull_request.labels.*.name, 'breaking') ||
-        contains(github.event.pull_request.labels.*.name, 'feature') ||
-        contains(github.event.pull_request.labels.*.name, 'vuln') ||
-        contains(github.event.pull_request.labels.*.name, 'release')))
+       ((inputs.release-only-with-label &&
+         contains(github.event.pull_request.labels.*.name, 'release')) ||
+        (!inputs.release-only-with-label &&
+         (contains(github.event.pull_request.labels.*.name, 'breaking') ||
+          contains(github.event.pull_request.labels.*.name, 'feature') ||
+          contains(github.event.pull_request.labels.*.name, 'vuln') ||
+          contains(github.event.pull_request.labels.*.name, 'release')))))
     outputs:
       full-tag: ${{ steps.release-drafter.outputs.tag_name }}
       short-tag: ${{ steps.get_tag_name.outputs.SHORT_TAG }}
