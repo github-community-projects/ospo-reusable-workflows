@@ -79,22 +79,59 @@ on:
 permissions: {}
 
 jobs:
+  check_release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Required by harden-runner
+    outputs:
+      should-release: ${{ steps.check.outputs.should-release }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+      - name: Evaluate release conditions
+        id: check
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_MERGED: ${{ github.event.pull_request.merged }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          RELEASE_ONLY: ${{ inputs.release-only-with-label }}
+        run: |
+          should_release=false
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "Manual dispatch: releasing"
+            should_release=true
+          elif [ "$PR_MERGED" != "true" ]; then
+            echo "PR not merged: skipping release"
+          else
+            IFS=',' read -ra labels <<< "$PR_LABELS"
+            if [ "$RELEASE_ONLY" = "true" ]; then
+              for label in "${labels[@]}"; do
+                if [ "$label" = "release" ]; then
+                  should_release=true
+                  break
+                fi
+              done
+            else
+              for label in "${labels[@]}"; do
+                case "$label" in
+                  breaking|feature|vuln|release)
+                    should_release=true
+                    break
+                    ;;
+                esac
+              done
+            fi
+            echo "PR labels: ${PR_LABELS}, release-only-with-label: ${RELEASE_ONLY}, should-release: ${should_release}"
+          fi
+
+          echo "should-release=$should_release" >> "$GITHUB_OUTPUT"
+
   create_release:
-    # Release if:
-    # - Manual deployment (workflow_dispatch), OR
-    # - release-only-with-label is true and the PR has the 'release' label, OR
-    # - release-only-with-label is false (default) and the PR has a breaking, feature, vuln, or release label
-    # Note: major/minor/patch labels alone do NOT trigger a release
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.pull_request.merged == true &&
-       ((inputs.release-only-with-label &&
-         contains(github.event.pull_request.labels.*.name, 'release')) ||
-        (!inputs.release-only-with-label &&
-         (contains(github.event.pull_request.labels.*.name, 'breaking') ||
-          contains(github.event.pull_request.labels.*.name, 'feature') ||
-          contains(github.event.pull_request.labels.*.name, 'vuln') ||
-          contains(github.event.pull_request.labels.*.name, 'release')))))
+    needs: check_release
+    if: needs.check_release.outputs.should-release == 'true'
     outputs:
       full-tag: ${{ steps.release-drafter.outputs.tag_name }}
       short-tag: ${{ steps.get_tag_name.outputs.SHORT_TAG }}
