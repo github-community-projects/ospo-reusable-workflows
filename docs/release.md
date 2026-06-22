@@ -27,6 +27,9 @@ Consolidated release workflow that creates a draft release, optionally builds ar
     goreleaser-config-path: .goreleaser.yaml
     # Path to go.mod or go.work file for Go version detection, default is go.mod
     go-version-file: go.mod
+    # Only release when the 'release' label is on the PR. When true,
+    # other trigger labels (breaking, feature, vuln) are ignored. Default is false.
+    release-only-with-label: false
 
     # --- Optional: Docker image build/push ---
     # Setting image-name enables the image build/push job
