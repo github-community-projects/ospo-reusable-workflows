@@ -106,7 +106,7 @@ jobs:
           elif [ "$PR_MERGED" != "true" ]; then
             echo "PR not merged: skipping release"
           else
-            IFS=',' read -ra labels <<< "$PR_LABELS"
+            IFS=',' read -ra labels <<< "${PR_LABELS,,}"
             if [ "$RELEASE_ONLY" = "true" ]; then
               for label in "${labels[@]}"; do
                 if [ "$label" = "release" ]; then
