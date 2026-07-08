@@ -1,7 +1,13 @@
 name: Mark PR Ready When Ready
 
+# Uses pull_request_target so the mark-ready step gets a read-write token on
+# fork PRs (pull_request hands forks a read-only token, so contents: write is
+# denied and the job fails). Safe here: the workflow never checks out or
+# executes PR-head code. The action reads the PR number, draft flag, labels,
+# and head SHA from the event payload and acts only via the API, so running in
+# the base-repo context does not evaluate any untrusted code.
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, edited, labeled, unlabeled, synchronize]
 
 permissions:
