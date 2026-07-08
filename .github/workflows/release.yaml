@@ -149,6 +149,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          # Check out the base branch tip, not the fork PR head. Without an
+          # explicit ref, pull_request_target defaults to refs/pull/N/merge,
+          # which checkout v7 refuses as fork code. Pinning to merge_commit_sha
+          # would also be refused (it is in the guard's blocklist), so the base
+          # branch is the guard-safe choice.
+          ref: ${{ github.event.pull_request.base.ref || github.ref }}
           fetch-depth: 0
           persist-credentials: true # Required for git push of tags
       - name: Draft release
@@ -190,6 +196,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          # Build from the release tag, matching release_image. Avoids the
+          # checkout v7 fork-PR refusal under pull_request_target.
+          ref: ${{ needs.create_release.outputs.full-tag }}
           fetch-depth: 0
           persist-credentials: false
 
