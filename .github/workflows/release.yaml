@@ -147,7 +147,7 @@ jobs:
         with:
           egress-policy: audit
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Check out the base branch tip, not the fork PR head. Without an
           # explicit ref, pull_request_target defaults to refs/pull/N/merge,
@@ -159,7 +159,7 @@ jobs:
           persist-credentials: true # Required for git push of tags
       - name: Draft release
         id: release-drafter
-        uses: release-drafter/release-drafter@4d75298e00d9e34c483e5ff8c68d0ea1c1940c1e # v7.5.1
+        uses: release-drafter/release-drafter@eada3c96a64734dd381cfbda23511034e328ddb0 # v7.6.0
         with:
           config-name: ${{ inputs.release-config-name }}
           publish: false
@@ -194,7 +194,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Build from the release tag, matching release_image. Avoids the
           # checkout v7 fork-PR refusal under pull_request_target.
@@ -359,7 +359,7 @@ jobs:
           echo "::error::image-registry-password secret is required when image-name is set"
           exit 1
 
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.create_release.outputs.full-tag }}
           persist-credentials: false
