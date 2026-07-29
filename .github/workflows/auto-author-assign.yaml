@@ -1,7 +1,11 @@
 ---
 name: "Auto Author Assign"
+# Uses pull_request_target so the assign step gets a read-write token on fork
+# PRs (pull_request hands forks a read-only token, which makes the assignees
+# API call fail). Safe here: the workflow never checks out or executes PR-head
+# code, it only assigns the author via the API from the event payload.
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, reopened, synchronize]
 permissions:
   contents: read
