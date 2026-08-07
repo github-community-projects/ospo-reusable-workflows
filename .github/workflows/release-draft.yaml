@@ -1,0 +1,137 @@
+---
+name: "Release Draft"
+# Building block: evaluates release conditions, creates a draft release via
+# release-drafter, and pushes the full and major version tags. Used by the
+# release variant workflows (release-minimal, release-goreleaser,
+# release-container) and callable directly for custom compositions. Pair with
+# release-publish.yaml to publish the draft after your build jobs complete.
+on:
+  workflow_call:
+    inputs:
+      release-config-name:
+        required: true
+        type: string
+      release-only-with-label:
+        description: "Only create a release when the 'release' label is present on the PR. When true, other trigger labels (breaking, feature, vuln) are ignored."
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      github-token:
+        required: true
+    outputs:
+      should-release:
+        description: "Whether release conditions were met"
+        value: ${{ jobs.check_release.outputs.should-release }}
+      full-tag:
+        description: "Full tag of release"
+        value: ${{ jobs.create_release.outputs.full-tag }}
+      short-tag:
+        description: "Short tag of release"
+        value: ${{ jobs.create_release.outputs.short-tag }}
+      body:
+        description: "Body content of release"
+        value: ${{ jobs.create_release.outputs.body }}
+      release-id:
+        description: "ID of the draft release"
+        value: ${{ jobs.create_release.outputs.release-id }}
+
+permissions: {}
+
+jobs:
+  check_release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Required by harden-runner
+    outputs:
+      should-release: ${{ steps.check.outputs.should-release }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+      - name: Evaluate release conditions
+        id: check
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_MERGED: ${{ github.event.pull_request.merged }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          RELEASE_ONLY: ${{ inputs.release-only-with-label }}
+        run: |
+          should_release=false
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "Manual dispatch: releasing"
+            should_release=true
+          elif [ "$PR_MERGED" != "true" ]; then
+            echo "PR not merged: skipping release"
+          else
+            IFS=',' read -ra labels <<< "${PR_LABELS,,}"
+            if [ "$RELEASE_ONLY" = "true" ]; then
+              for label in "${labels[@]}"; do
+                if [ "$label" = "release" ]; then
+                  should_release=true
+                  break
+                fi
+              done
+            else
+              for label in "${labels[@]}"; do
+                case "$label" in
+                  breaking|feature|vuln|release)
+                    should_release=true
+                    break
+                    ;;
+                esac
+              done
+            fi
+            echo "PR labels: ${PR_LABELS}, release-only-with-label: ${RELEASE_ONLY}, should-release: ${should_release}"
+          fi
+
+          echo "should-release=$should_release" >> "$GITHUB_OUTPUT"
+
+  create_release:
+    needs: check_release
+    if: needs.check_release.outputs.should-release == 'true'
+    outputs:
+      full-tag: ${{ steps.release-drafter.outputs.tag_name }}
+      short-tag: ${{ steps.get_tag_name.outputs.SHORT_TAG }}
+      body: ${{ steps.release-drafter.outputs.body }}
+      release-id: ${{ steps.release-drafter.outputs.id }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Create draft release via release-drafter
+      pull-requests: read # Read PR labels for release-drafter
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Check out the base branch tip, not the fork PR head. Without an
+          # explicit ref, pull_request_target defaults to refs/pull/N/merge,
+          # which checkout v7 refuses as fork code. Pinning to merge_commit_sha
+          # would also be refused (it is in the guard's blocklist), so the base
+          # branch is the guard-safe choice.
+          ref: ${{ github.event.pull_request.base.ref || github.ref }}
+          fetch-depth: 0
+          persist-credentials: true # Required for git push of tags
+      - name: Draft release
+        id: release-drafter
+        uses: release-drafter/release-drafter@34d80673e067bdc0c24568d3af899c216adcfaa9 # v7.7.0
+        with:
+          config-name: ${{ inputs.release-config-name }}
+          publish: false
+          token: ${{ secrets.github-token }}
+      - name: Get the Short Tag
+        id: get_tag_name
+        run: |
+          short_tag=$(echo "${{ steps.release-drafter.outputs.tag_name }}" | cut -d. -f1)
+          echo "SHORT_TAG=$short_tag" >> "$GITHUB_OUTPUT"
+      - name: Create and push tags
+        run: |
+          git tag -f "${{ steps.release-drafter.outputs.tag_name }}"
+          git tag -f "${{ steps.get_tag_name.outputs.SHORT_TAG }}" "${{ steps.release-drafter.outputs.tag_name }}"
+          git push -f origin "${{ steps.release-drafter.outputs.tag_name }}"
+          git push -f origin "${{ steps.get_tag_name.outputs.SHORT_TAG }}"
