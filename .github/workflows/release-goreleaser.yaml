@@ -1,0 +1,155 @@
+---
+name: "Release GoReleaser"
+# Release variant: draft release + tags + GoReleaser build/upload + publish.
+# No attestation; use release-goreleaser-attest.yaml for build provenance
+# and SBOM (Software Bill of Materials) attestations.
+# Callers only need to grant:
+#   contents: write
+#   pull-requests: read
+on:
+  workflow_call:
+    inputs:
+      publish:
+        description: "Publish the release after all jobs complete. When false, the release remains a draft."
+        required: false
+        type: boolean
+        default: true
+      release-config-name:
+        required: true
+        type: string
+      goreleaser-config-path:
+        description: "Path to GoReleaser config file."
+        required: true
+        type: string
+      go-version-file:
+        description: "Path to go.mod or go.work file for Go version detection."
+        required: false
+        type: string
+        default: "go.mod"
+      release-only-with-label:
+        description: "Only create a release when the 'release' label is present on the PR. When true, other trigger labels (breaking, feature, vuln) are ignored."
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      github-token:
+        required: true
+    outputs:
+      full-tag:
+        description: "Full tag of release"
+        value: ${{ jobs.draft.outputs.full-tag }}
+      short-tag:
+        description: "Short tag of release"
+        value: ${{ jobs.draft.outputs.short-tag }}
+      body:
+        description: "Body content of release"
+        value: ${{ jobs.draft.outputs.body }}
+      published:
+        description: "'true' when the release was published; empty when no release happened or publish is false"
+        value: ${{ jobs.publish.outputs.published }}
+
+permissions: {}
+
+jobs:
+  draft:
+    permissions:
+      contents: write # Create draft release and push tags
+      pull-requests: read # Read PR labels for release-drafter
+    uses: ./.github/workflows/release-draft.yaml
+    with:
+      release-config-name: ${{ inputs.release-config-name }}
+      release-only-with-label: ${{ inputs.release-only-with-label }}
+    secrets:
+      github-token: ${{ secrets.github-token }}
+
+  release_goreleaser:
+    needs: draft
+    if: ${{ needs.draft.outputs.full-tag != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Upload release assets
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Build from the release tag. Avoids the checkout v7 fork-PR
+          # refusal under pull_request_target.
+          ref: ${{ needs.draft.outputs.full-tag }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install yq
+        uses: mikefarah/yq@1b9b4ac5187171d2e5e3129be0cfa827c7f9d53d # v4.53.3
+        with:
+          cmd: echo "yq installed"
+
+      - name: Validate GoReleaser config has release disabled
+        run: |
+          config="${{ inputs.goreleaser-config-path }}"
+          if ! [ -f "$config" ]; then
+            echo "::error::GoReleaser config file not found: $config"
+            exit 1
+          fi
+          release_disabled=$(yq '.release.disable' "$config")
+          if [ "$release_disabled" != "true" ]; then
+            echo "::error::GoReleaser config must have 'release: disable: true' to prevent conflicting with the draft release created by this workflow. See https://github.com/github-community-projects/ospo-reusable-workflows/blob/main/docs/release-goreleaser.md#goreleaser-configuration"
+            exit 1
+          fi
+
+      - name: Detect SBOM generation in GoReleaser config
+        id: detect-sbom
+        run: |
+          sboms=$(yq '.sboms // ""' "${{ inputs.goreleaser-config-path }}")
+          if [ -n "$sboms" ] && [ "$sboms" != "null" ]; then
+            echo "needs_syft=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs_syft=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Syft for SBOM generation
+        if: steps.detect-sbom.outputs.needs_syft == 'true'
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: ${{ inputs.go-version-file }}
+
+      - name: Build with GoReleaser
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean --config ${{ inputs.goreleaser-config-path }}
+        env:
+          GORELEASER_CURRENT_TAG: ${{ needs.draft.outputs.full-tag }}
+
+      - name: Upload artifacts to draft release
+        run: |
+          shopt -s nullglob
+          files=(dist/*.tar.gz dist/*.zip dist/checksums.txt dist/*.spdx.json)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::No artifacts found in dist/ to upload"
+            exit 1
+          fi
+          gh release upload "${{ needs.draft.outputs.full-tag }}" \
+            "${files[@]}" \
+            --clobber
+        env:
+          GH_TOKEN: ${{ secrets.github-token }}
+
+  publish:
+    needs: [draft, release_goreleaser]
+    if: ${{ inputs.publish && needs.draft.outputs.release-id != '' }}
+    permissions:
+      contents: write # Publish draft release
+    uses: ./.github/workflows/release-publish.yaml
+    with:
+      release-id: ${{ needs.draft.outputs.release-id }}
+    secrets:
+      github-token: ${{ secrets.github-token }}

@@ -1,7 +1,7 @@
 # Reusable Workflows
 
 > [!IMPORTANT]
-> The Release Image and Release Discussion workflows are now deprecated. The have been consolidated into the Release workflow.
+> The Release Image workflow is deprecated (consolidated into the Release workflow). The release workflow now comes in multiple variants so callers only grant the permissions they need — see [Choosing a variant](docs/release.md#choosing-a-variant).
 
 This is a placeholder repo for multiple GitHub Actions we use in open source projects.
 
@@ -11,9 +11,11 @@ This is a placeholder repo for multiple GitHub Actions we use in open source pro
 - [Labeler](docs/labeler.md)
 - [Major Version Updater](docs/major-version-updater.md)
 - [PR Title](docs/pr-title.md)
-- [Release](docs/release.md)
-- [Release Image](docs/release-image.md)
-- [Release Discussion](docs/release-discussion.md)
+- [Release](docs/release.md) (full, feature-flagged)
+- [Release Minimal](docs/release-minimal.md)
+- [Release GoReleaser](docs/release-goreleaser.md) (with and without attestation)
+- [Release Container](docs/release-container.md) (with and without attestation)
+- [Release Discussion](docs/release-discussion.md) (chainable announcement)
 
 > [!CAUTION]
 > Check the permissions in each reusable workflow to ensure the GitHub token you pass from your calling workflow meets the required permissions. Most of the time just passing `${{ secrets.GITHUB_TOKEN }}` is sufficient.

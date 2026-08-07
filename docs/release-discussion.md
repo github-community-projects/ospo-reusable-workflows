@@ -1,61 +1,61 @@
 # Release Discussion Reusable Workflow
 
-> [!CAUTION]
-> This workflow has been deprecated and consolidated into the [Release workflow](release.md). Calling `release-discussion.yaml` directly will fail with an error. Migrate by setting the `discussion-category-id` and `discussion-repository-id` secrets on `release.yaml` instead.
+Creates a GitHub Discussions announcement for a published release. Chain this workflow after any release variant workflow ([release-minimal](release-minimal.md), [release-goreleaser](release-goreleaser.md), [release-container](release-container.md)) using that workflow's outputs. This keeps `discussions: write` scoped to the discussion job only instead of forcing it on the whole release workflow.
 
-## Migration
+The consolidated [release.yaml](release.md) has discussion creation built in; use this workflow with the slimmer variants.
 
-Replace your existing `release-discussion.yaml` call:
-
-```yaml
-# Before (deprecated)
-release_discussion:
-  needs: release
-  uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-discussion.yaml@main
-  with:
-    full-tag: ${{ needs.release.outputs.full-tag }}
-    body: ${{ needs.release.outputs.body }}
-  secrets:
-    github-token: ${{ secrets.GITHUB_TOKEN }}
-    discussion-repository-id: ${{ secrets.DISCUSSION_REPOSITORY_ID }}
-    discussion-category-id: ${{ secrets.DISCUSSION_CATEGORY_ID }}
-```
-
-With the consolidated `release.yaml` secrets:
+## Usage
 
 ```yaml
-# After
-release:
-  uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release.yaml@main
-  with:
-    release-config-name: release-drafter.yaml
-  secrets:
-    github-token: ${{ secrets.GITHUB_TOKEN }}
-    discussion-category-id: ${{ secrets.DISCUSSION_CATEGORY_ID }}
-    discussion-repository-id: ${{ secrets.DISCUSSION_REPOSITORY_ID }}
+jobs:
+  release:
+    permissions:
+      contents: write # Create releases and push tags
+      pull-requests: read # Read PR labels for release-drafter
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-minimal.yaml@main
+    with:
+      release-config-name: release-drafter.yml
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  discussion:
+    needs: release
+    # Only announce when a release was actually published
+    if: ${{ needs.release.outputs.published == 'true' }}
+    permissions:
+      contents: read # Required by harden-runner
+      discussions: write # Create announcement discussions
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-discussion.yaml@main
+    with:
+      full-tag: ${{ needs.release.outputs.full-tag }}
+      body: ${{ needs.release.outputs.body }}
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+      discussion-repository-id: ${{ secrets.DISCUSSION_REPOSITORY_ID }}
+      discussion-category-id: ${{ secrets.DISCUSSION_CATEGORY_ID }}
 ```
 
-Key changes:
-- `full-tag` and `body` no longer need to be passed — they are handled internally
-- Discussion IDs moved from required secrets to optional secrets
+The workflow skips gracefully (with a notice, not a failure) when the discussion IDs are empty or when Discussions are not enabled on the target repository.
 
-See the full [Release workflow documentation](release.md) for all available inputs.
+## Getting the discussion IDs
 
-## Notes
+Use the GitHub CLI (gh) with the following GraphQL query (replace `OWNER` and `REPO` with the appropriate values):
 
-To get the discussion repository ID and category ID, use the GitHub GraphQL API Explorer: https://docs.github.com/en/graphql/overview/explorer with the following query (replace `OWNER` and `REPO` with the appropriate values):
-
-```graphql
-query {
-  repository(owner: "OWNER", name: "REPO") {
-    id
-    discussionCategories(first: 50) {
-      nodes {
-        id
-        name
-        slug
+```
+gh api graphql -f query='
+  query($owner: String!, $repo: String!) {
+    repository(owner: $owner, name: $repo) {
+      id
+      discussionCategories(first: 50) {
+        nodes {
+          id
+          name
+          slug
+        }
       }
     }
   }
-}
+' -f owner='OWNER' -f repo='REPO'
 ```
+
+Store the repository `id` as the `DISCUSSION_REPOSITORY_ID` secret and the chosen category `id` as the `DISCUSSION_CATEGORY_ID` secret.

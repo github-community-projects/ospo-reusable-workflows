@@ -1,0 +1,63 @@
+---
+name: "Release Minimal"
+# Release variant: draft release + tags + publish. No artifact builds.
+# Callers only need to grant:
+#   contents: write
+#   pull-requests: read
+on:
+  workflow_call:
+    inputs:
+      publish:
+        description: "Publish the release after all jobs complete. When false, the release remains a draft."
+        required: false
+        type: boolean
+        default: true
+      release-config-name:
+        required: true
+        type: string
+      release-only-with-label:
+        description: "Only create a release when the 'release' label is present on the PR. When true, other trigger labels (breaking, feature, vuln) are ignored."
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      github-token:
+        required: true
+    outputs:
+      full-tag:
+        description: "Full tag of release"
+        value: ${{ jobs.draft.outputs.full-tag }}
+      short-tag:
+        description: "Short tag of release"
+        value: ${{ jobs.draft.outputs.short-tag }}
+      body:
+        description: "Body content of release"
+        value: ${{ jobs.draft.outputs.body }}
+      published:
+        description: "'true' when the release was published; empty when no release happened or publish is false"
+        value: ${{ jobs.publish.outputs.published }}
+
+permissions: {}
+
+jobs:
+  draft:
+    permissions:
+      contents: write # Create draft release and push tags
+      pull-requests: read # Read PR labels for release-drafter
+    uses: ./.github/workflows/release-draft.yaml
+    with:
+      release-config-name: ${{ inputs.release-config-name }}
+      release-only-with-label: ${{ inputs.release-only-with-label }}
+    secrets:
+      github-token: ${{ secrets.github-token }}
+
+  publish:
+    needs: draft
+    if: ${{ inputs.publish && needs.draft.outputs.release-id != '' }}
+    permissions:
+      contents: write # Publish draft release
+    uses: ./.github/workflows/release-publish.yaml
+    with:
+      release-id: ${{ needs.draft.outputs.release-id }}
+    secrets:
+      github-token: ${{ secrets.github-token }}

@@ -1,0 +1,47 @@
+---
+name: "Release Publish"
+# Building block: publishes a draft release created by release-draft.yaml.
+# Used by the release variant workflows and callable directly for custom
+# compositions. Call this after all build jobs that attach assets to the
+# draft release have completed, so repositories with immutable releases
+# enabled get a complete release at publish time.
+on:
+  workflow_call:
+    inputs:
+      release-id:
+        description: "ID of the draft release to publish, from release-draft.yaml"
+        required: true
+        type: string
+    secrets:
+      github-token:
+        required: true
+    outputs:
+      published:
+        description: "'true' when the draft release was published"
+        value: ${{ jobs.publish_release.outputs.published }}
+
+permissions: {}
+
+jobs:
+  publish_release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Publish draft release
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Publish draft release
+        id: publish
+        run: |
+          gh api \
+            --method PATCH \
+            "/repos/${{ github.repository }}/releases/${{ inputs.release-id }}" \
+            -F draft=false
+          echo "published=true" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.github-token }}

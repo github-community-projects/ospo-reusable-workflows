@@ -1,0 +1,167 @@
+---
+name: "Release Container with Attestation"
+# Release variant: draft release + tags + Docker image build/push + build
+# provenance attestation + publish. Attestation is always on; it is skipped
+# automatically with a warning on private repositories where attestation is
+# not available.
+# Callers only need to grant:
+#   contents: write
+#   pull-requests: read
+#   packages: write
+#   id-token: write
+#   attestations: write
+on:
+  workflow_call:
+    inputs:
+      publish:
+        description: "Publish the release after all jobs complete. When false, the release remains a draft."
+        required: false
+        type: boolean
+        default: true
+      release-config-name:
+        required: true
+        type: string
+      image-name:
+        description: "Docker image name (e.g., owner/repo)."
+        required: true
+        type: string
+      image-registry:
+        description: "Container registry URL."
+        required: false
+        type: string
+        default: "ghcr.io"
+      image-registry-username:
+        description: "Container registry username."
+        required: false
+        type: string
+        default: ""
+      image-platforms:
+        description: "Comma-separated list of target platforms for Docker build."
+        required: false
+        type: string
+        default: "linux/amd64,linux/arm64"
+      release-only-with-label:
+        description: "Only create a release when the 'release' label is present on the PR. When true, other trigger labels (breaking, feature, vuln) are ignored."
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      github-token:
+        required: true
+      image-registry-password:
+        required: true
+    outputs:
+      full-tag:
+        description: "Full tag of release"
+        value: ${{ jobs.draft.outputs.full-tag }}
+      short-tag:
+        description: "Short tag of release"
+        value: ${{ jobs.draft.outputs.short-tag }}
+      body:
+        description: "Body content of release"
+        value: ${{ jobs.draft.outputs.body }}
+      published:
+        description: "'true' when the release was published; empty when no release happened or publish is false"
+        value: ${{ jobs.publish.outputs.published }}
+
+permissions: {}
+
+jobs:
+  draft:
+    permissions:
+      contents: write # Create draft release and push tags
+      pull-requests: read # Read PR labels for release-drafter
+    uses: ./.github/workflows/release-draft.yaml
+    with:
+      release-config-name: ${{ inputs.release-config-name }}
+      release-only-with-label: ${{ inputs.release-only-with-label }}
+    secrets:
+      github-token: ${{ secrets.github-token }}
+
+  release_image:
+    needs: draft
+    if: ${{ needs.draft.outputs.full-tag != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Clone the repository
+      packages: write # Push container images
+      id-token: write # Federate via Workload Identity for attestation
+      attestations: write # Create build provenance attestation
+    env:
+      IMAGE_REGISTRY: ${{ inputs.image-registry }}
+      IMAGE_REGISTRY_USERNAME: ${{ inputs.image-registry-username || github.actor }}
+      IMAGE_REGISTRY_PASSWORD: ${{ secrets.image-registry-password }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Validate image registry password
+        if: ${{ env.IMAGE_REGISTRY_PASSWORD == '' }}
+        run: |
+          echo "::error::image-registry-password secret is required"
+          exit 1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.draft.outputs.full-tag }}
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
+        with:
+          registry: ${{ env.IMAGE_REGISTRY }}
+          username: ${{ env.IMAGE_REGISTRY_USERNAME }}
+          password: ${{ env.IMAGE_REGISTRY_PASSWORD }}
+
+      - name: Push Docker Image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        id: push
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_REGISTRY }}/${{ inputs.image-name }}:latest
+            ${{ env.IMAGE_REGISTRY }}/${{ inputs.image-name }}:${{ needs.draft.outputs.full-tag }}
+            ${{ env.IMAGE_REGISTRY }}/${{ inputs.image-name }}:${{ needs.draft.outputs.short-tag }}
+          platforms: ${{ inputs.image-platforms }}
+          provenance: false
+          sbom: false
+
+      - name: Check repository visibility
+        id: repo-visibility
+        run: |
+          visibility=$(gh api "repos/${{ github.repository }}" --jq '.visibility')
+          echo "is_public=$( [ "$visibility" = "public" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.github-token }}
+
+      - name: Generate artifact attestation
+        if: ${{ steps.repo-visibility.outputs.is_public == 'true' }}
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-name: ${{ env.IMAGE_REGISTRY }}/${{ inputs.image-name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+          github-token: ${{ secrets.github-token }}
+
+      - name: Skip attestation notice
+        if: ${{ steps.repo-visibility.outputs.is_public != 'true' }}
+        run: |
+          echo "::warning::Artifact attestation skipped — not available for private user-owned repositories. Make this repository public to enable attestation."
+
+  publish:
+    needs: [draft, release_image]
+    if: ${{ inputs.publish && needs.draft.outputs.release-id != '' }}
+    permissions:
+      contents: write # Publish draft release
+    uses: ./.github/workflows/release-publish.yaml
+    with:
+      release-id: ${{ needs.draft.outputs.release-id }}
+    secrets:
+      github-token: ${{ secrets.github-token }}
