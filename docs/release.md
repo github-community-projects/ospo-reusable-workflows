@@ -41,6 +41,13 @@ Consolidated release workflow that creates a draft release, optionally builds ar
     image-registry-username: ${{ github.actor }}
     # Comma-separated list of target platforms, default is linux/amd64,linux/arm64
     image-platforms: linux/amd64,linux/arm64
+    # Path to the Dockerfile, default is ./Dockerfile
+    image-dockerfile: ./Dockerfile
+    # Newline-separated build-time variables passed to the Docker build,
+    # default is none. Useful for baking build metadata into the image,
+    # e.g. the commit SHA.
+    image-build-args: |
+      GIT_COMMIT=${{ github.sha }}
     # Flag to create build provenance attestations, default is false
     # Attestation is only available for public repositories. Private repos
     # will see a warning and skip attestation automatically.

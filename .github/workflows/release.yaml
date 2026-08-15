@@ -41,6 +41,16 @@ on:
         required: false
         type: string
         default: "linux/amd64,linux/arm64"
+      image-dockerfile:
+        description: "Path to the Dockerfile."
+        required: false
+        type: string
+        default: "./Dockerfile"
+      image-build-args:
+        description: "Newline-separated list of build-time variables (passed through to docker/build-push-action build-args)."
+        required: false
+        type: string
+        default: ""
       goreleaser-config-path:
         description: "Path to GoReleaser config file. Enables GoReleaser build/upload when set."
         required: false
@@ -379,7 +389,8 @@ jobs:
         id: push
         with:
           context: .
-          file: ./Dockerfile
+          file: ${{ inputs.image-dockerfile }}
+          build-args: ${{ inputs.image-build-args }}
           push: true
           tags: |
             ${{ env.IMAGE_REGISTRY }}/${{ inputs.image-name }}:latest
