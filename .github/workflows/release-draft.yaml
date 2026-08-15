@@ -47,7 +47,7 @@ jobs:
       should-release: ${{ steps.check.outputs.should-release }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
           egress-policy: audit
       - name: Evaluate release conditions
@@ -103,7 +103,7 @@ jobs:
       pull-requests: read # Read PR labels for release-drafter
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
           egress-policy: audit
       - name: Checkout
@@ -126,12 +126,17 @@ jobs:
           token: ${{ secrets.github-token }}
       - name: Get the Short Tag
         id: get_tag_name
+        env:
+          FULL_TAG: ${{ steps.release-drafter.outputs.tag_name }}
         run: |
-          short_tag=$(echo "${{ steps.release-drafter.outputs.tag_name }}" | cut -d. -f1)
+          short_tag=$(echo "$FULL_TAG" | cut -d. -f1)
           echo "SHORT_TAG=$short_tag" >> "$GITHUB_OUTPUT"
       - name: Create and push tags
+        env:
+          FULL_TAG: ${{ steps.release-drafter.outputs.tag_name }}
+          SHORT_TAG: ${{ steps.get_tag_name.outputs.SHORT_TAG }}
         run: |
-          git tag -f "${{ steps.release-drafter.outputs.tag_name }}"
-          git tag -f "${{ steps.get_tag_name.outputs.SHORT_TAG }}" "${{ steps.release-drafter.outputs.tag_name }}"
-          git push -f origin "${{ steps.release-drafter.outputs.tag_name }}"
-          git push -f origin "${{ steps.get_tag_name.outputs.SHORT_TAG }}"
+          git tag -f "$FULL_TAG"
+          git tag -f "$SHORT_TAG" "$FULL_TAG"
+          git push -f origin "$FULL_TAG"
+          git push -f origin "$SHORT_TAG"

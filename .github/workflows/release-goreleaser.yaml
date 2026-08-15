@@ -70,7 +70,7 @@ jobs:
       contents: write # Upload release assets
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
           egress-policy: audit
 
@@ -89,8 +89,10 @@ jobs:
           cmd: echo "yq installed"
 
       - name: Validate GoReleaser config has release disabled
+        env:
+          GORELEASER_CONFIG_PATH: ${{ inputs.goreleaser-config-path }}
         run: |
-          config="${{ inputs.goreleaser-config-path }}"
+          config="$GORELEASER_CONFIG_PATH"
           if ! [ -f "$config" ]; then
             echo "::error::GoReleaser config file not found: $config"
             exit 1
@@ -103,8 +105,10 @@ jobs:
 
       - name: Detect SBOM generation in GoReleaser config
         id: detect-sbom
+        env:
+          GORELEASER_CONFIG_PATH: ${{ inputs.goreleaser-config-path }}
         run: |
-          sboms=$(yq '.sboms // ""' "${{ inputs.goreleaser-config-path }}")
+          sboms=$(yq '.sboms // ""' "$GORELEASER_CONFIG_PATH")
           if [ -n "$sboms" ] && [ "$sboms" != "null" ]; then
             echo "needs_syft=true" >> "$GITHUB_OUTPUT"
           else
@@ -137,10 +141,11 @@ jobs:
             echo "::error::No artifacts found in dist/ to upload"
             exit 1
           fi
-          gh release upload "${{ needs.draft.outputs.full-tag }}" \
+          gh release upload "$FULL_TAG" \
             "${files[@]}" \
             --clobber
         env:
+          FULL_TAG: ${{ needs.draft.outputs.full-tag }}
           GH_TOKEN: ${{ secrets.github-token }}
 
   publish:
