@@ -10,8 +10,7 @@ on:
   pull_request_target:
     types: [opened, edited, labeled, unlabeled, synchronize]
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
@@ -22,10 +21,10 @@ jobs:
     name: Mark as ready after successful checks
     runs-on: ubuntu-latest
     permissions:
-      checks: read
-      contents: write
-      pull-requests: write
-      statuses: read
+      checks: read # Read check-run results
+      contents: write # Required by the mark-ready action to update the PR
+      pull-requests: write # Flip the PR out of draft
+      statuses: read # Read commit statuses
     if: |
       contains(github.event.pull_request.labels.*.name, 'Mark Ready When Ready') &&
       github.event.pull_request.draft == true

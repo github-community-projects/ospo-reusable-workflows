@@ -9,12 +9,14 @@ on:
     secrets:
       github-token:
         required: true
-permissions:
-  contents: read
+permissions: {}
 jobs:
   main:
     permissions:
-      pull-requests: write
+      # The autolabeler fetches the config file via the contents API,
+      # which fails on private repositories without an explicit grant.
+      contents: read
+      pull-requests: write # Apply labels to the pull request
     name: Auto label pull requests
     runs-on: ubuntu-latest
     steps:
