@@ -57,6 +57,15 @@ All variants share the same draft-first core: they create the draft release and 
     image-registry-username: ${{ github.actor }}
     # Comma-separated list of target platforms, default is linux/amd64,linux/arm64
     image-platforms: linux/amd64,linux/arm64
+    # Path to the Dockerfile, default is ./Dockerfile
+    image-dockerfile: ./Dockerfile
+    # Newline-separated Docker build arguments in KEY=VALUE form, passed
+    # to the Docker build via docker/build-push-action build-args.
+    # Default is none. Useful for baking build metadata into the image,
+    # e.g. the commit SHA. Do not use build args for secrets; they can be
+    # exposed in build logs and image history.
+    image-build-args: |
+      GIT_COMMIT=${{ github.sha }}
     # Flag to create build provenance attestations, default is false
     # Attestation is only available for public repositories. Private repos
     # will see a warning and skip attestation automatically.
