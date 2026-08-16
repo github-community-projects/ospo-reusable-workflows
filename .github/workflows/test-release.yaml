@@ -14,15 +14,26 @@ jobs:
       packages: write # Push container images
       id-token: write # Federate via Workload Identity for attestation
       attestations: write # Create build provenance attestation
-      discussions: write # Create announcement discussions
-    uses: ./.github/workflows/release.yaml
+    uses: ./.github/workflows/release-container-attest.yaml
     with:
       publish: true
       release-config-name: release-drafter.yaml
       image-name: ${{ github.repository }}
-      create-attestation: true
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
       image-registry-password: ${{ secrets.GITHUB_TOKEN }}
-      discussion-category-id: ${{ secrets.DISCUSSION_CATEGORY_ID }}
+
+  discussion:
+    needs: release
+    if: ${{ needs.release.outputs.published == 'true' }}
+    permissions:
+      contents: read # Required by harden-runner
+      discussions: write # Create announcement discussions
+    uses: ./.github/workflows/release-discussion.yaml
+    with:
+      full-tag: ${{ needs.release.outputs.full-tag }}
+      body: ${{ needs.release.outputs.body }}
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
       discussion-repository-id: ${{ secrets.DISCUSSION_REPOSITORY_ID }}
+      discussion-category-id: ${{ secrets.DISCUSSION_CATEGORY_ID }}

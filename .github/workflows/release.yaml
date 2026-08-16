@@ -166,15 +166,20 @@ jobs:
           token: ${{ secrets.github-token }}
       - name: Get the Short Tag
         id: get_tag_name
+        env:
+          FULL_TAG: ${{ steps.release-drafter.outputs.tag_name }}
         run: |
-          short_tag=$(echo "${{ steps.release-drafter.outputs.tag_name }}" | cut -d. -f1)
+          short_tag=$(echo "$FULL_TAG" | cut -d. -f1)
           echo "SHORT_TAG=$short_tag" >> "$GITHUB_OUTPUT"
       - name: Create and push tags
+        env:
+          FULL_TAG: ${{ steps.release-drafter.outputs.tag_name }}
+          SHORT_TAG: ${{ steps.get_tag_name.outputs.SHORT_TAG }}
         run: |
-          git tag -f "${{ steps.release-drafter.outputs.tag_name }}"
-          git tag -f "${{ steps.get_tag_name.outputs.SHORT_TAG }}" "${{ steps.release-drafter.outputs.tag_name }}"
-          git push -f origin "${{ steps.release-drafter.outputs.tag_name }}"
-          git push -f origin "${{ steps.get_tag_name.outputs.SHORT_TAG }}"
+          git tag -f "$FULL_TAG"
+          git tag -f "$SHORT_TAG" "$FULL_TAG"
+          git push -f origin "$FULL_TAG"
+          git push -f origin "$SHORT_TAG"
 
   release_goreleaser:
     needs: create_release
@@ -208,8 +213,10 @@ jobs:
           cmd: echo "yq installed"
 
       - name: Validate GoReleaser config has release disabled
+        env:
+          GORELEASER_CONFIG_PATH: ${{ inputs.goreleaser-config-path }}
         run: |
-          config="${{ inputs.goreleaser-config-path }}"
+          config="$GORELEASER_CONFIG_PATH"
           if ! [ -f "$config" ]; then
             echo "::error::GoReleaser config file not found: $config"
             exit 1
@@ -222,8 +229,10 @@ jobs:
 
       - name: Detect SBOM generation in GoReleaser config
         id: detect-sbom
+        env:
+          GORELEASER_CONFIG_PATH: ${{ inputs.goreleaser-config-path }}
         run: |
-          sboms=$(yq '.sboms // ""' "${{ inputs.goreleaser-config-path }}")
+          sboms=$(yq '.sboms // ""' "$GORELEASER_CONFIG_PATH")
           if [ -n "$sboms" ] && [ "$sboms" != "null" ]; then
             echo "needs_syft=true" >> "$GITHUB_OUTPUT"
           else
@@ -256,16 +265,17 @@ jobs:
             echo "::error::No artifacts found in dist/ to upload"
             exit 1
           fi
-          gh release upload "${{ needs.create_release.outputs.full-tag }}" \
+          gh release upload "$FULL_TAG" \
             "${files[@]}" \
             --clobber
         env:
+          FULL_TAG: ${{ needs.create_release.outputs.full-tag }}
           GH_TOKEN: ${{ secrets.github-token }}
 
       - name: Check repository visibility
         id: repo-visibility
         run: |
-          visibility=$(gh api "repos/${{ github.repository }}" --jq '.visibility')
+          visibility=$(gh api "repos/${GITHUB_REPOSITORY}" --jq '.visibility')
           echo "is_public=$( [ "$visibility" = "public" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ secrets.github-token }}
@@ -393,7 +403,7 @@ jobs:
         if: ${{ inputs.create-attestation }}
         id: repo-visibility
         run: |
-          visibility=$(gh api "repos/${{ github.repository }}" --jq '.visibility')
+          visibility=$(gh api "repos/${GITHUB_REPOSITORY}" --jq '.visibility')
           echo "is_public=$( [ "$visibility" = "public" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ secrets.github-token }}
@@ -431,13 +441,14 @@ jobs:
           egress-policy: audit
 
       - name: Publish draft release
+        env:
+          RELEASE_ID: ${{ needs.create_release.outputs.release-id }}
+          GH_TOKEN: ${{ secrets.github-token }}
         run: |
           gh api \
             --method PATCH \
-            "/repos/${{ github.repository }}/releases/${{ needs.create_release.outputs.release-id }}" \
+            "/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
             -F draft=false
-        env:
-          GH_TOKEN: ${{ secrets.github-token }}
 
   release_discussion:
     needs: [create_release, publish_release]

@@ -2,6 +2,22 @@
 
 Consolidated release workflow that creates a draft release, optionally builds artifacts (GoReleaser, Docker images), publishes the release after all build jobs succeed, and then creates a GitHub Discussions announcement. This draft-first pattern supports repositories with immutable releases enabled and ensures announcements only fire for releases that publish successfully.
 
+## Choosing a variant
+
+GitHub validates the permissions of every job in a called reusable workflow at parse time, before evaluating `if` conditions. Because this consolidated workflow bundles all optional jobs, callers must grant all six permission scopes even for features they do not use. If you only need some features, use one of the slimmer variant workflows instead:
+
+| Workflow | Features | Required permissions |
+| --- | --- | --- |
+| [release-minimal.yaml](release-minimal.md) | draft + tags + publish | `contents: write`, `pull-requests: read` |
+| [release-goreleaser.yaml](release-goreleaser.md) | minimal + Go binaries/SBOMs | `contents: write`, `pull-requests: read` |
+| [release-goreleaser-attest.yaml](release-goreleaser.md) | above + provenance/SBOM attestations | + `id-token: write`, `attestations: write` |
+| [release-container.yaml](release-container.md) | minimal + Docker image push | `contents: write`, `pull-requests: read`, `packages: write` |
+| [release-container-attest.yaml](release-container.md) | above + image attestation | + `id-token: write`, `attestations: write` |
+| [release-discussion.yaml](release-discussion.md) | chainable announcement discussion | `contents: read`, `discussions: write` (on that job only) |
+| release.yaml (this workflow) | everything, feature-flagged | all six scopes below |
+
+All variants share the same draft-first core: they create the draft release and tags, run their build jobs, and only then publish, so immutable releases stay supported. To announce releases from a variant, chain [release-discussion.yaml](release-discussion.md) on the variant's outputs.
+
 ## Inputs
 
 ```yaml
@@ -132,3 +148,50 @@ gh api graphql -f query='
   }
 ' -f owner='OWNER' -f repo='REPO'
 ```
+
+## Composing your own release workflow
+
+The variant workflows are thin compositions of two building blocks, which are also callable directly if no variant fits your needs:
+
+- [release-draft.yaml](../.github/workflows/release-draft.yaml) - evaluates release conditions (PR merged + trigger labels, or manual dispatch), creates the draft release via release-drafter, and pushes the full and major version tags. Outputs `should-release`, `full-tag`, `short-tag`, `body`, and `release-id`. Requires `contents: write`, `pull-requests: read`.
+- [release-publish.yaml](../.github/workflows/release-publish.yaml) - publishes the draft release by `release-id`. Requires `contents: write`.
+
+Put your own build jobs between them to attach assets to the draft before it publishes:
+
+```yaml
+jobs:
+  draft:
+    permissions:
+      contents: write # Create draft release and push tags
+      pull-requests: read # Read PR labels for release-drafter
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-draft.yaml@main
+    with:
+      release-config-name: release-drafter.yml
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    needs: draft
+    if: ${{ needs.draft.outputs.full-tag != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Upload release assets
+    steps:
+      # ... build your artifacts, then:
+      - run: gh release upload "${{ needs.draft.outputs.full-tag }}" dist/*
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    needs: [draft, build]
+    if: ${{ needs.draft.outputs.release-id != '' }}
+    permissions:
+      contents: write # Publish draft release
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-publish.yaml@main
+    with:
+      release-id: ${{ needs.draft.outputs.release-id }}
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+Reusable workflows can nest up to four levels deep. Calling a variant from your workflow uses three (your workflow, the variant, the building block), so you have one level to spare.
