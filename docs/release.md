@@ -43,9 +43,11 @@ Consolidated release workflow that creates a draft release, optionally builds ar
     image-platforms: linux/amd64,linux/arm64
     # Path to the Dockerfile, default is ./Dockerfile
     image-dockerfile: ./Dockerfile
-    # Newline-separated build-time variables passed to the Docker build,
-    # default is none. Useful for baking build metadata into the image,
-    # e.g. the commit SHA.
+    # Newline-separated Docker build arguments in KEY=VALUE form, passed
+    # to the Docker build via docker/build-push-action build-args.
+    # Default is none. Useful for baking build metadata into the image,
+    # e.g. the commit SHA. Do not use build args for secrets; they can be
+    # exposed in build logs and image history.
     image-build-args: |
       GIT_COMMIT=${{ github.sha }}
     # Flag to create build provenance attestations, default is false

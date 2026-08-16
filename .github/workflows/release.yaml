@@ -47,7 +47,7 @@ on:
         type: string
         default: "./Dockerfile"
       image-build-args:
-        description: "Newline-separated list of build-time variables (passed through to docker/build-push-action build-args)."
+        description: "Newline-separated list of Docker build arguments in KEY=VALUE form (passed through to docker/build-push-action build-args). Do not pass secrets; build args can be exposed in build logs and image history."
         required: false
         type: string
         default: ""
