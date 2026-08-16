@@ -9,13 +9,12 @@ on:
     secrets:
       github-token:
         required: true
-permissions:
-  contents: read
+permissions: {}
 jobs:
   labeler:
     permissions:
-      contents: read
-      pull-requests: write
+      contents: read # Read the labeler configuration
+      pull-requests: write # Apply labels to the pull request
     runs-on: ubuntu-latest
     steps:
       - name: Harden the runner (Audit all outbound calls)

@@ -4,14 +4,13 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "30 1 * * *" # https://crontab.guru/#30_1_*_*_* (everyday at 0130)
-permissions:
-  contents: read
+permissions: {}
 jobs:
   stale:
     runs-on: ubuntu-latest
     permissions:
-      issues: write
-      pull-requests: write
+      issues: write # Mark and close stale issues
+      pull-requests: write # Mark and close stale pull requests
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1

@@ -9,16 +9,14 @@ on:
     secrets:
       github-token:
         required: true
-permissions:
-  contents: read
+permissions: {}
 jobs:
   main:
     permissions:
-      # Job-level permissions replace the workflow-level block, so contents
-      # must be repeated here: the autolabeler fetches the config file via the
-      # contents API, which fails on private repositories without it.
+      # The autolabeler fetches the config file via the contents API,
+      # which fails on private repositories without an explicit grant.
       contents: read
-      pull-requests: write
+      pull-requests: write # Apply labels to the pull request
     name: Auto label pull requests
     runs-on: ubuntu-latest
     steps:
