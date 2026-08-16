@@ -37,6 +37,16 @@ on:
         required: false
         type: string
         default: "linux/amd64,linux/arm64"
+      image-dockerfile:
+        description: "Path to the Dockerfile."
+        required: false
+        type: string
+        default: "./Dockerfile"
+      image-build-args:
+        description: "Newline-separated list of Docker build arguments in KEY=VALUE form (passed through to docker/build-push-action build-args). Do not pass secrets; build args can be exposed in build logs and image history."
+        required: false
+        type: string
+        default: ""
       release-only-with-label:
         description: "Only create a release when the 'release' label is present on the PR. When true, other trigger labels (breaking, feature, vuln) are ignored."
         required: false
@@ -118,7 +128,8 @@ jobs:
         id: push
         with:
           context: .
-          file: ./Dockerfile
+          file: ${{ inputs.image-dockerfile }}
+          build-args: ${{ inputs.image-build-args }}
           push: true
           tags: |
             ${{ env.IMAGE_REGISTRY }}/${{ inputs.image-name }}:latest
