@@ -10,6 +10,7 @@ jobs:
     permissions:
       contents: read # Read the release-drafter config
       pull-requests: write # Apply labels to the pull request
+      issues: write # Auto-create labels referenced in the autolabeler config
     uses: ./.github/workflows/auto-labeler.yaml
     with:
       config-name: release-drafter.yaml
