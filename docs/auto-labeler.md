@@ -5,8 +5,9 @@
 ```yaml
 - uses: github-community-projects/ospo-reusable-workflows/.github/workflows/auto-labeler.yaml@main
   permissions:
-    contents: read
-    pull-requests: write
+    contents: read # Read the autolabeler config
+    pull-requests: write # Apply labels to the pull request
+    issues: write # Auto-create labels missing from the repository
   with:
     # The name of the configuration file to use, default is release-drafter.yml
     # from the release-drafter/release-drafter GitHub Action
@@ -19,3 +20,12 @@
 ## Outputs
 
 None
+
+## Missing labels
+
+If the autolabeler config references a label that does not exist in the repository, GitHub creates it automatically while applying it. This is why the workflow requires `issues: write`; the labels API is part of the Issues API.
+
+Auto-created labels get a default color and no description. If you care about label colors or descriptions, pre-create the labels (for example with the [Labeler workflow](labeler.md)) and the auto-labeler will use them as-is.
+
+> [!IMPORTANT]
+> `issues: write` became required in v2.0.0. Callers referencing `@main` receive this change as soon as it merges and must add the grant to their permissions block immediately. Callers pinned to v1 must add it when they upgrade to v2. Without the grant the workflow fails at startup with "The nested job 'main' is requesting 'issues: write', but is only allowed 'issues: none'".

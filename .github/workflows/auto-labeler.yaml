@@ -17,6 +17,7 @@ jobs:
       # which fails on private repositories without an explicit grant.
       contents: read
       pull-requests: write # Apply labels to the pull request
+      issues: write # Auto-create labels referenced in the autolabeler config but missing from the repository
     name: Auto label pull requests
     runs-on: ubuntu-latest
     steps:
