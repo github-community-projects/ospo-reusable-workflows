@@ -177,51 +177,98 @@ jobs:
           ref: ${{ github.event.pull_request.base.ref || github.ref }}
           fetch-depth: 0
           persist-credentials: true # Required for git push of tags
-      - name: Install yq
-        if: inputs.version-file != '' && inputs.version-key != ''
-        uses: mikefarah/yq@c14f446382944492701b16c1ddb48bb9dbe683e3 # v4.53.6
-        with:
-          cmd: echo "yq installed"
       - name: Read version from file
+        # Inline copy of scripts/resolve-version.sh. A reusable workflow runs in
+        # the caller's checkout, so the script is not on disk here. The
+        # test-scripts workflow fails if this block drifts from the script.
         id: version-file
         if: inputs.version-file != ''
         env:
           VERSION_FILE: ${{ inputs.version-file }}
           VERSION_KEY: ${{ inputs.version-key }}
         run: |
-          if [ ! -f "$VERSION_FILE" ]; then
-            echo "::error::version-file '$VERSION_FILE' not found in the repository"
+          #!/usr/bin/env bash
+          # Resolve a release version from a file in the repository.
+          #
+          # Usage: resolve-version.sh <version-file> [version-key]
+          #
+          #   version-file  Path to the file holding the version, relative to the
+          #                 repository root.
+          #   version-key   yq expression selecting the version inside a JSON, YAML, or
+          #                 TOML file (for example .version). Omit for a plain-text file
+          #                 whose first line is the version.
+          #
+          # Arguments may also be passed as VERSION_FILE and VERSION_KEY environment
+          # variables, which is how the release workflows invoke the inline copy.
+          #
+          # Prints the bare semver (no leading v) on stdout, and writes version=<semver>
+          # to GITHUB_OUTPUT when that variable is set. Exits non-zero with a ::error::
+          # annotation on stderr when the file or key is missing, or when the value is
+          # not a valid semver. Build metadata (1.2.3+build) is rejected because
+          # release-drafter's version template drops it and Docker image tags cannot
+          # contain a plus sign.
+          set -euo pipefail
+
+          file="${1:-${VERSION_FILE:-}}"
+          key="${2:-${VERSION_KEY:-}}"
+
+          if [ -z "$file" ]; then
+            echo "::error::usage: resolve-version.sh <version-file> [version-key]" >&2
             exit 1
           fi
 
-          if [ -n "$VERSION_KEY" ]; then
-            case "$VERSION_FILE" in
-              *.toml) version=$(yq -p toml -o yaml "$VERSION_KEY" "$VERSION_FILE") ;;
-              *) version=$(yq -o yaml "$VERSION_KEY" "$VERSION_FILE") ;;
-            esac
-          else
-            version=$(head -n 1 "$VERSION_FILE")
-          fi
-
-          # Tolerate surrounding whitespace and a leading v; the tag-template
-          # in the release-drafter config adds the prefix.
-          version=$(printf '%s' "$version" | tr -d '[:space:]')
-          version="${version#v}"
-
-          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
-            echo "::error::version '$version' read from $VERSION_FILE is not a valid semver (expected MAJOR.MINOR.PATCH)"
+          if [ ! -f "$file" ]; then
+            echo "::error::version-file '$file' not found in the repository" >&2
             exit 1
           fi
 
-          for tag in "v$version" "$version"; do
-            if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
-              echo "::error::tag $tag already exists; bump the version in $VERSION_FILE before releasing"
+          if [ -n "$key" ]; then
+            if ! command -v yq >/dev/null 2>&1; then
+              echo "::error::yq is required to read '$key' from '$file' but is not on PATH" >&2
               exit 1
             fi
-          done
+            case "$file" in
+              *.toml) raw=$(yq -p toml -o yaml "$key" "$file") ;;
+              *) raw=$(yq -o yaml "$key" "$file") ;;
+            esac
+          else
+            raw=$(head -n 1 "$file")
+          fi
 
-          echo "Using version $version from $VERSION_FILE"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # Trim leading and trailing whitespace only, so internal whitespace still
+          # fails validation below.
+          raw="${raw#"${raw%%[![:space:]]*}"}"
+          raw="${raw%"${raw##*[![:space:]]}"}"
+
+          if [ -z "$raw" ] || [ "$raw" = "null" ]; then
+            echo "::error::no version found at '${key:-first line}' in '$file'" >&2
+            exit 1
+          fi
+
+          # Tolerate a leading v; the tag-template in the release-drafter config adds
+          # the prefix.
+          version="${raw#v}"
+
+          if [[ "$version" == *+* ]]; then
+            echo "::error::version '$version' from '$file' contains build metadata, which is not supported (use MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-PRERELEASE)" >&2
+            exit 1
+          fi
+
+          # semver.org grammar without build metadata. Numeric identifiers cannot have
+          # leading zeros; prerelease identifiers are dot-separated and non-empty.
+          num='(0|[1-9][0-9]*)'
+          ident='(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)'
+          semver="^${num}\\.${num}\\.${num}(-${ident}(\\.${ident})*)?$"
+
+          if ! [[ "$version" =~ $semver ]]; then
+            echo "::error::version '$version' from '$file' is not a valid semver (expected MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-PRERELEASE)" >&2
+            exit 1
+          fi
+
+          printf '%s\n' "$version"
+          if [ -n "${GITHUB_OUTPUT:-}" ]; then
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+          fi
       - name: Draft release
         id: release-drafter
         uses: release-drafter/release-drafter@34d80673e067bdc0c24568d3af899c216adcfaa9 # v7.7.0
@@ -230,6 +277,74 @@ jobs:
           publish: false
           version: ${{ steps.version-file.outputs.version }}
           token: ${{ secrets.github-token }}
+      - name: Check release tag
+        # Inline copy of scripts/check-tag.sh. Verifies the tag release-drafter
+        # resolved (honoring the caller's tag-template) does not already exist
+        # at another commit, so the push below cannot move a released tag.
+        env:
+          TAG: ${{ steps.release-drafter.outputs.tag_name }}
+        run: |
+          #!/usr/bin/env bash
+          # Verify that a release tag can be pushed without moving an existing tag.
+          #
+          # Usage: check-tag.sh <tag> [remote]
+          #
+          # Arguments may also be passed as TAG and REMOTE environment variables, which
+          # is how the release workflows invoke the inline copy.
+          #
+          # Exits 0 when the tag does not exist on the remote, or when it already points
+          # at HEAD (a re-run of a partially failed release). Exits 1 when the tag exists
+          # and points elsewhere, or when the remote cannot be queried, so the caller
+          # fails closed instead of force-pushing over a release.
+          set -euo pipefail
+
+          tag="${1:-${TAG:-}}"
+          remote="${2:-${REMOTE:-origin}}"
+
+          if [ -z "$tag" ]; then
+            echo "::error::usage: check-tag.sh <tag> [remote]" >&2
+            exit 1
+          fi
+
+          set +e
+          output=$(git ls-remote --exit-code --tags "$remote" "refs/tags/$tag" "refs/tags/$tag^{}" 2>&1)
+          status=$?
+          set -e
+
+          case "$status" in
+            2)
+              echo "Tag $tag does not exist on $remote"
+              exit 0
+              ;;
+            0) ;;
+            *)
+              echo "::error::git ls-remote failed for $remote (exit $status): $output" >&2
+              exit 1
+              ;;
+          esac
+
+          # Prefer the peeled line (refs/tags/<tag>^{}) for annotated tags so we compare
+          # the commit, not the tag object.
+          remote_sha=$(printf '%s\n' "$output" | awk -v peeled="refs/tags/$tag^{}" -v plain="refs/tags/$tag" '
+            $2 == peeled { print $1; found = 1; exit }
+            $2 == plain && !found { sha = $1 }
+            END { if (!found && sha) print sha }
+          ')
+
+          if [ -z "$remote_sha" ]; then
+            echo "::error::could not parse git ls-remote output for $tag: $output" >&2
+            exit 1
+          fi
+
+          head_sha=$(git rev-parse HEAD)
+
+          if [ "$remote_sha" = "$head_sha" ]; then
+            echo "Tag $tag already points at HEAD ($head_sha); re-run is safe"
+            exit 0
+          fi
+
+          echo "::error::tag $tag already exists on $remote at $remote_sha (HEAD is $head_sha); bump the version before releasing" >&2
+          exit 1
       - name: Get the Short Tag
         id: get_tag_name
         env:
@@ -244,7 +359,7 @@ jobs:
         run: |
           git tag -f "$FULL_TAG"
           git tag -f "$SHORT_TAG" "$FULL_TAG"
-          git push -f origin "$FULL_TAG"
+          git push origin "$FULL_TAG"
           git push -f origin "$SHORT_TAG"
 
   release_goreleaser:
