@@ -16,6 +16,16 @@ on:
         required: false
         type: boolean
         default: false
+      version-file:
+        description: "Path (relative to the repository root) to a file that holds the release version, for example VERSION, package.json, or Chart.yaml. When set, the version is read from this file instead of being resolved from PR labels."
+        required: false
+        type: string
+        default: ""
+      version-key:
+        description: "yq expression that selects the version inside version-file, for example .version. Leave empty when version-file is plain text containing only the version."
+        required: false
+        type: string
+        default: ""
     secrets:
       github-token:
         required: true
@@ -117,12 +127,58 @@ jobs:
           ref: ${{ github.event.pull_request.base.ref || github.ref }}
           fetch-depth: 0
           persist-credentials: true # Required for git push of tags
+      - name: Install yq
+        if: inputs.version-file != '' && inputs.version-key != ''
+        uses: mikefarah/yq@c14f446382944492701b16c1ddb48bb9dbe683e3 # v4.53.6
+        with:
+          cmd: echo "yq installed"
+      - name: Read version from file
+        id: version-file
+        if: inputs.version-file != ''
+        env:
+          VERSION_FILE: ${{ inputs.version-file }}
+          VERSION_KEY: ${{ inputs.version-key }}
+        run: |
+          if [ ! -f "$VERSION_FILE" ]; then
+            echo "::error::version-file '$VERSION_FILE' not found in the repository"
+            exit 1
+          fi
+
+          if [ -n "$VERSION_KEY" ]; then
+            case "$VERSION_FILE" in
+              *.toml) version=$(yq -p toml -o yaml "$VERSION_KEY" "$VERSION_FILE") ;;
+              *) version=$(yq -o yaml "$VERSION_KEY" "$VERSION_FILE") ;;
+            esac
+          else
+            version=$(head -n 1 "$VERSION_FILE")
+          fi
+
+          # Tolerate surrounding whitespace and a leading v; the tag-template
+          # in the release-drafter config adds the prefix.
+          version=$(printf '%s' "$version" | tr -d '[:space:]')
+          version="${version#v}"
+
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
+            echo "::error::version '$version' read from $VERSION_FILE is not a valid semver (expected MAJOR.MINOR.PATCH)"
+            exit 1
+          fi
+
+          for tag in "v$version" "$version"; do
+            if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+              echo "::error::tag $tag already exists; bump the version in $VERSION_FILE before releasing"
+              exit 1
+            fi
+          done
+
+          echo "Using version $version from $VERSION_FILE"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Draft release
         id: release-drafter
         uses: release-drafter/release-drafter@34d80673e067bdc0c24568d3af899c216adcfaa9 # v7.7.0
         with:
           config-name: ${{ inputs.release-config-name }}
           publish: false
+          version: ${{ steps.version-file.outputs.version }}
           token: ${{ secrets.github-token }}
       - name: Get the Short Tag
         id: get_tag_name

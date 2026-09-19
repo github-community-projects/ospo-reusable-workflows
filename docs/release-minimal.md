@@ -23,9 +23,33 @@ jobs:
       # Only release when the 'release' label is on the PR. When true,
       # other trigger labels (breaking, feature, vuln) are ignored. Default is false.
       release-only-with-label: false
+      # Read the release version from a file instead of resolving it from PR
+      # labels. Path is relative to the repository root. Default is empty.
+      version-file: ""
+      # yq expression that selects the version inside version-file, for example
+      # .version for package.json. Leave empty for a plain-text file. Default is empty.
+      version-key: ""
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
+
+## Version from a file
+
+Set `version-file` to read the release version from a file in the repository instead of resolving it from PR labels. Set `version-key` to a [yq](https://mikefarah.gitbook.io/yq/) expression when the file is JSON, YAML, or TOML; leave it empty when the file contains only the version.
+
+| File | `version-file` | `version-key` |
+| ---- | -------------- | ------------- |
+| `VERSION` (plain text) | `VERSION` | |
+| `package.json` | `package.json` | `.version` |
+| `Chart.yaml` | `Chart.yaml` | `.version` |
+| `pyproject.toml` | `pyproject.toml` | `.project.version` |
+
+Behavior:
+
+- The file is read from the base branch after the PR is merged, so bump the version in the same PR that is labeled `release`.
+- The value must be a bare semver (`1.2.3`, with an optional prerelease or build suffix). A leading `v` and surrounding whitespace are stripped. The `tag-template` and `name-template` in the release-drafter config still apply, so `v$RESOLVED_VERSION` produces `v1.2.3`.
+- The job fails when the file is missing, the value is not semver, or a tag for that version already exists. This prevents a duplicate release when the version was not bumped.
+- Trigger labels (`release`, `breaking`, `feature`, `vuln`) still decide *whether* to release. Version-resolver labels (`major`, `minor`, `patch`) are ignored for the version.
 
 ## Outputs
 
