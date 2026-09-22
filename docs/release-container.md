@@ -82,7 +82,7 @@ Set `version-file` to read the release version from a file in the repository ins
 Behavior:
 
 - The file is read from the base branch after the PR is merged, so bump the version in the same PR that is labeled `release`.
-- The value must be a bare semver: `1.2.3` or `1.2.3-rc.1`. Build metadata (`1.2.3+build`) is rejected because release-drafter's version template drops it and Docker image tags cannot contain `+`. A leading `v` and surrounding whitespace are stripped. The `tag-template` and `name-template` in the release-drafter config still apply, so `v$RESOLVED_VERSION` produces `v1.2.3`.
+- The value must be a stable semver: `1.2.3`. Prereleases (`1.2.3-rc.1`) are rejected because the release workflows have no prerelease handling and would publish one as the latest release and move the major tag to it. Build metadata (`1.2.3+build`) is rejected because release-drafter's version template drops it and Docker image tags cannot contain `+`. A leading `v` and surrounding whitespace are stripped. The `tag-template` and `name-template` in the release-drafter config still apply, so `v$RESOLVED_VERSION` produces `v1.2.3`.
 - The job fails when the file is missing, the key does not match, or the value is not semver.
 - Reading a structured file needs `yq` on the runner. `ubuntu-latest` ships it.
 - Trigger labels (`release`, `breaking`, `feature`, `vuln`) still decide *whether* to release. Version-resolver labels (`major`, `minor`, `patch`) are ignored for the version.

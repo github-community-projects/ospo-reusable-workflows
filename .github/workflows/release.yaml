@@ -204,9 +204,11 @@ jobs:
           # Prints the bare semver (no leading v) on stdout, and writes version=<semver>
           # to GITHUB_OUTPUT when that variable is set. Exits non-zero with a ::error::
           # annotation on stderr when the file or key is missing, or when the value is
-          # not a valid semver. Build metadata (1.2.3+build) is rejected because
-          # release-drafter's version template drops it and Docker image tags cannot
-          # contain a plus sign.
+          # not a stable MAJOR.MINOR.PATCH version. Prerelease suffixes (1.2.3-rc.1) are
+          # rejected because the release workflows have no prerelease handling: the
+          # release would be marked latest and the major tag and image aliases would
+          # move to it. Build metadata (1.2.3+build) is rejected because release-drafter's
+          # version template drops it and Docker image tags cannot contain a plus sign.
           set -euo pipefail
 
           file="${1:-${VERSION_FILE:-}}"
@@ -250,18 +252,22 @@ jobs:
           version="${raw#v}"
 
           if [[ "$version" == *+* ]]; then
-            echo "::error::version '$version' from '$file' contains build metadata, which is not supported (use MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-PRERELEASE)" >&2
+            echo "::error::version '$version' from '$file' contains build metadata, which is not supported (use MAJOR.MINOR.PATCH)" >&2
             exit 1
           fi
 
-          # semver.org grammar without build metadata. Numeric identifiers cannot have
-          # leading zeros; prerelease identifiers are dot-separated and non-empty.
+          if [[ "$version" == *-* ]]; then
+            echo "::error::version '$version' from '$file' is a prerelease, which is not supported (use MAJOR.MINOR.PATCH)" >&2
+            exit 1
+          fi
+
+          # semver.org grammar for the core version. Numeric identifiers cannot have
+          # leading zeros.
           num='(0|[1-9][0-9]*)'
-          ident='(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)'
-          semver="^${num}\\.${num}\\.${num}(-${ident}(\\.${ident})*)?$"
+          semver="^${num}\\.${num}\\.${num}$"
 
           if ! [[ "$version" =~ $semver ]]; then
-            echo "::error::version '$version' from '$file' is not a valid semver (expected MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-PRERELEASE)" >&2
+            echo "::error::version '$version' from '$file' is not a valid semver (expected MAJOR.MINOR.PATCH)" >&2
             exit 1
           fi
 

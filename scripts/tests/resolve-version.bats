@@ -59,11 +59,11 @@ teardown() {
   [ "$output" = "7.8.9" ]
 }
 
-@test "prerelease is accepted" {
+@test "prerelease is rejected" {
   printf '{"version":"1.2.3-rc.1"}\n' > v.json
   run "$SCRIPT" v.json .version
-  [ "$status" -eq 0 ]
-  [ "$output" = "1.2.3-rc.1" ]
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"is a prerelease"* ]]
 }
 
 @test "build metadata is rejected" {
