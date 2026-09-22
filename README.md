@@ -27,6 +27,8 @@ This is a placeholder repo for multiple GitHub Actions we use in open source pro
 > In order to update the semver version of a release both the `release` and a semver label (`major`, `minor`, or `patch`) must be used on the pull request that is merged to `main`.
 >
 > This is to prevent accidental version bumps from pull requests that are not intended to be releases. (example: Dependabot PRs that label themselves with semver labels)
+>
+> To take the version from a file in your repository instead, set the `version-file` input. See [Version from a file](docs/release.md#version-from-a-file).
 
 > [!TIP]
 > You can reuse the following files in this repository in your own as they are used by the reusable workflows:

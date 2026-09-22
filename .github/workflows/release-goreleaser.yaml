@@ -31,6 +31,16 @@ on:
         required: false
         type: boolean
         default: false
+      version-file:
+        description: "Path (relative to the repository root) to a file that holds the release version, for example VERSION, package.json, or Chart.yaml. When set, the version is read from this file instead of being resolved from PR labels."
+        required: false
+        type: string
+        default: ""
+      version-key:
+        description: "yq expression that selects the version inside version-file, for example .version. Leave empty when version-file is plain text containing only the version."
+        required: false
+        type: string
+        default: ""
     secrets:
       github-token:
         required: true
@@ -59,6 +69,8 @@ jobs:
     with:
       release-config-name: ${{ inputs.release-config-name }}
       release-only-with-label: ${{ inputs.release-only-with-label }}
+      version-file: ${{ inputs.version-file }}
+      version-key: ${{ inputs.version-key }}
     secrets:
       github-token: ${{ secrets.github-token }}
 

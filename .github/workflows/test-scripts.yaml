@@ -1,0 +1,55 @@
+---
+name: "Test Scripts"
+# Runs the bats suites for scripts/ and verifies the inline copies embedded in
+# the release workflows match the scripts byte for byte.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Clone the repository
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install bats
+        uses: bats-core/bats-action@77d6fb60505b4d0d1d73e48bd035b55074bbfb43 # 4.0.0
+        with:
+          support-install: false
+          assert-install: false
+          detik-install: false
+          file-install: false
+      - name: Lint scripts
+        run: shellcheck scripts/*.sh
+      - name: Run bats
+        run: bats scripts/tests/
+      - name: Check inline copies match scripts
+        run: |
+          status=0
+          check() {
+            local workflow="$1" step="$2" script="$3"
+            # Command substitution trims trailing newlines; printf adds back exactly one.
+            if ! diff -u "$script" <(printf '%s\n' "$(yq ".jobs.create_release.steps[] | select(.name == \"$step\") | .run" "$workflow")"); then
+              echo "::error file=$workflow::inline '$step' step drifted from $script"
+              status=1
+            fi
+          }
+          for workflow in .github/workflows/release-draft.yaml .github/workflows/release.yaml; do
+            check "$workflow" "Read version from file" scripts/resolve-version.sh
+            check "$workflow" "Check release tag" scripts/check-tag.sh
+          done
+          exit "$status"
