@@ -51,5 +51,7 @@ jobs:
           for workflow in .github/workflows/release-draft.yaml .github/workflows/release.yaml; do
             check "$workflow" "Read version from file" scripts/resolve-version.sh
             check "$workflow" "Check release tag" scripts/check-tag.sh
+            check "$workflow" "Check for a published release" scripts/has-published-release.sh
+            check "$workflow" "Fill first-release notes" scripts/first-release-notes.sh
           done
           exit "$status"

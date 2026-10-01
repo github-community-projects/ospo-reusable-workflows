@@ -134,7 +134,7 @@ jobs:
 
 The workflow runs up to six jobs:
 
-1. **create_release** - Always runs. Creates a draft release via release-drafter, then creates and pushes the full and major version git tags.
+1. **create_release** - Always runs. Creates a draft release via release-drafter (with GitHub-generated notes on a [first release](#notes)), then creates and pushes the full and major version git tags.
 2. **release_goreleaser** - Runs when `goreleaser-config-path` is set. Builds Go binaries, uploads artifacts to the draft release, and optionally creates attestations.
 3. **attest_sboms** - Runs when `create-attestation: true`, the repository is public, and GoReleaser produced `*.spdx.json` files. Creates an SBOM attestation linking each archive to its corresponding SBOM via `actions/attest-sbom`. Fans out across archive/SBOM pairs via a matrix.
 4. **release_image** - Runs when `image-name` is set. Builds and pushes a multi-platform Docker image, and optionally creates attestations.
@@ -164,6 +164,7 @@ When `create-attestation: true` and SBOMs are produced, the `attest_sboms` job a
 ## Notes
 
 - The draft-first pattern supports repositories with **immutable releases** enabled. The release is created as a draft, artifacts are uploaded, and only then is it published.
+- **First release:** release-drafter only lists changes since the last published release, so on a repository with no published release it would write "No changes". In that case the workflow replaces the draft body with [GitHub's generated release notes](https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes) for the tag, which honor `.github/release.yml` if you have one. Later releases keep the release-drafter body. Bodies over GitHub's 125,000-character limit are truncated.
 - Artifact attestation requires a **public repository**. Private user-owned or organization repositories on free plans will see a warning and skip attestation automatically.
 - To get the discussion repository ID and category ID, use the GitHub CLI (gh) with the following cli and graphql query (replace `OWNER` and `REPO` with the appropriate values):
   - Our former suggested way to get this information, The GraphQL API Explorer](https://docs.github.com/en/graphql/guides/using-graphql-clients), was removed on November 11, 2025.

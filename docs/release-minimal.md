@@ -63,7 +63,7 @@ Behavior:
 
 ## Jobs
 
-1. **draft** - Evaluates release conditions, creates a draft release via release-drafter, and pushes the full and major version git tags (via [release-draft.yaml](../.github/workflows/release-draft.yaml)).
+1. **draft** - Evaluates release conditions, creates a draft release via release-drafter (with GitHub-generated notes on a [first release](release.md#notes)), and pushes the full and major version git tags (via [release-draft.yaml](../.github/workflows/release-draft.yaml)).
 2. **publish** - Publishes the draft release when `publish` is true (via [release-publish.yaml](../.github/workflows/release-publish.yaml)).
 
 ## Announcement discussion
