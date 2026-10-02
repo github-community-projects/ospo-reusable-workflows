@@ -431,7 +431,9 @@ jobs:
           fi
 
           # The block starts with a "---" rule and the warning, and ends at the next rule.
-          jq '{body: (.body // "" | sub("\n---\n> \\[!WARNING\\]\n> Release Drafter could not find a previous [\\s\\S]*?\n---\n"; ""))}' \
+          # A draft's tag does not exist yet, and a PATCH without tag_name resets it to
+          # an "untagged-" placeholder, so send the tag, name, and target back unchanged.
+          jq '{tag_name, name, target_commitish, body: (.body // "" | sub("\n---\n> \\[!WARNING\\]\n> Release Drafter could not find a previous [\\s\\S]*?\n---\n"; ""))}' \
             "$work/release.json" > "$work/patch.json"
 
           if [ "$(jq -r '.body' "$work/patch.json")" = "$(jq -r '.body // ""' "$work/release.json")" ]; then

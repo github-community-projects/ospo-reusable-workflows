@@ -27,7 +27,7 @@ STUB
 
   notes=$'# Changelog\n## Features\n\n- feat: add widget @someone (#1)\n'
   warning=$'\n---\n> [!WARNING]\n> Release Drafter could not find a previous **published release** for `owner/repo`. This draft was created **without a comparison baseline**.\n\n> [!IMPORTANT]\n> Treat this draft as a manual starting point.\n\nIf you did not expect this to happen, [open an issue](https://example.com).\n---\n'
-  jq -n --arg body "$notes$warning" '{body: $body}' > "$GH_RELEASE"
+  jq -n --arg body "$notes$warning" '{tag_name: "v1.0.0", name: "v1.0.0", target_commitish: "main", body: $body}' > "$GH_RELEASE"
   NOTES="$notes"
 }
 
@@ -41,6 +41,14 @@ teardown() {
   [[ "$output" == *"removed the missing-baseline warning from release 42"* ]]
   [ "$(jq -r '.body' "$WORK/patched.json")" = "${NOTES%$'\n'}" ]
   grep -q 'api --method PATCH repos/owner/repo/releases/42' "$GH_LOG"
+}
+
+@test "sends the tag, name, and target back with the body" {
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.tag_name' "$WORK/patched.json")" = "v1.0.0" ]
+  [ "$(jq -r '.name' "$WORK/patched.json")" = "v1.0.0" ]
+  [ "$(jq -r '.target_commitish' "$WORK/patched.json")" = "main" ]
 }
 
 @test "keeps a footer after the warning" {
