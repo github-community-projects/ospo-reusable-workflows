@@ -23,6 +23,7 @@ STUB
   export RETRY_DELAY=0
   unset EVENT_NAME PR_MERGED PR_LABELS RELEASE_ONLY GH_STDOUT GH_EXIT
   export GITHUB_REPOSITORY=owner/repo GITHUB_SHA="$SHA"
+  export GITHUB_REF=refs/heads/main DEFAULT_BRANCH=main
 }
 
 teardown() {
@@ -128,6 +129,35 @@ teardown() {
   EVENT_NAME=push PR_MERGED=true PR_LABELS=feature GH_STDOUT=$'#12 docs\n' run "$SCRIPT"
   [ "$status" -eq 0 ]
   [ "${lines[-1]}" = "should-release=false" ]
+}
+
+@test "push of a tag skips without a lookup" {
+  EVENT_NAME=push GITHUB_REF=refs/tags/v1.2.3 GH_STDOUT=$'#12 feature\n' run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "${lines[-1]}" = "should-release=false" ]
+  [[ "$output" == *"not the default branch main"* ]]
+  [ ! -e "$GH_LOG" ]
+}
+
+@test "push to another branch skips without a lookup" {
+  EVENT_NAME=push GITHUB_REF=refs/heads/release GH_STDOUT=$'#12 feature\n' run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "${lines[-1]}" = "should-release=false" ]
+  [ ! -e "$GH_LOG" ]
+}
+
+@test "push to a renamed default branch releases" {
+  EVENT_NAME=push GITHUB_REF=refs/heads/trunk DEFAULT_BRANCH=trunk GH_STDOUT=$'#12 feature\n' run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "${lines[-1]}" = "should-release=true" ]
+}
+
+@test "push requires the default branch" {
+  unset DEFAULT_BRANCH
+  EVENT_NAME=push run "$SCRIPT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"DEFAULT_BRANCH"* ]]
+  [ ! -e "$GH_LOG" ]
 }
 
 @test "push API error fails closed" {

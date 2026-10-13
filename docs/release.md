@@ -32,7 +32,7 @@ concurrency:
   cancel-in-progress: false
 ```
 
-On `push`, the workflow looks up the pull request that the pushed commit merged and reads its labels. A push with no merged pull request, such as a direct commit, does not release. When several pull requests land in one push, only the one that produced the pushed commit counts. A `workflow_dispatch` run always releases.
+On `push`, the workflow looks up the pull request that the pushed commit merged and reads its labels. Only a push to the default branch can release. A tag push, a push to another branch, or a direct commit with no merged pull request does not. When several pull requests land in one push, only the one that produced the pushed commit counts. A `workflow_dispatch` run always releases.
 
 Callers that still trigger on `pull_request_target` with `types: [closed]` keep working unchanged. The release variants below accept both triggers.
 

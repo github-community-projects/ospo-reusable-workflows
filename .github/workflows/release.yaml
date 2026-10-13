@@ -122,6 +122,7 @@ jobs:
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
           RELEASE_ONLY: ${{ inputs.release-only-with-label }}
           GH_TOKEN: ${{ secrets.github-token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           #!/usr/bin/env bash
           # Decide whether a workflow run should create a release.
@@ -138,13 +139,17 @@ jobs:
           #   GITHUB_REPOSITORY, GITHUB_SHA
           #                  For push events, the commit whose merged pull request
           #                  supplies the labels. Needs gh on PATH and a token in GH_TOKEN.
+          #   GITHUB_REF, DEFAULT_BRANCH
+          #                  For push events, the pushed ref and the repository's default
+          #                  branch. Only a push to the default branch can release.
           #   RETRY_DELAY    Seconds to wait before retrying an empty pull request
           #                  lookup, default 10. GitHub can take a few seconds to
           #                  associate a merged pull request with its commit.
           #
-          # A workflow_dispatch run always releases. A push run releases when the pushed
-          # commit is the merge commit of a merged pull request that carries a trigger
-          # label, so a direct push with no pull request does not release. Any other run
+          # A workflow_dispatch run always releases. A push run releases when it pushed
+          # the default branch and the pushed commit is the merge commit of a merged pull
+          # request that carries a trigger label, so a tag push, a push to another
+          # branch, or a direct push with no pull request does not release. Any other run
           # releases when its pull request is merged and carries a trigger label. The
           # trigger labels are breaking, feature, vuln, and release, or only release
           # when RELEASE_ONLY is true.
@@ -175,9 +180,17 @@ jobs:
           if [ "$event" = "push" ]; then
             repo="${GITHUB_REPOSITORY:-}"
             sha="${GITHUB_SHA:-}"
-            if [ -z "$repo" ]; then
-              echo "::error::GITHUB_REPOSITORY is required for push events" >&2
+            ref="${GITHUB_REF:-}"
+            default_branch="${DEFAULT_BRANCH:-}"
+            if [ -z "$repo" ] || [ -z "$default_branch" ]; then
+              echo "::error::GITHUB_REPOSITORY and DEFAULT_BRANCH are required for push events" >&2
               exit 1
+            fi
+            # A tag that points at a merge commit would otherwise release that pull
+            # request a second time.
+            if [ "$ref" != "refs/heads/$default_branch" ]; then
+              echo "Push to $ref, not the default branch $default_branch: skipping release" >&2
+              finish false
             fi
             # The SHA is interpolated into the jq filter, so accept only a full hex SHA.
             if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
