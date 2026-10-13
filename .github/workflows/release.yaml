@@ -269,9 +269,10 @@ jobs:
           # explicit ref, pull_request_target defaults to refs/pull/N/merge,
           # which checkout v7 refuses as fork code. Pinning to merge_commit_sha
           # would also be refused (it is in the guard's blocklist), so the base
-          # branch is the guard-safe choice. On push and workflow_dispatch
-          # there is no pull request, so github.ref is the pushed branch.
-          ref: ${{ github.event.pull_request.base.ref || github.ref }}
+          # branch is the guard-safe choice. A push run checks out the commit
+          # check_release evaluated, so a commit landing on the branch in the
+          # meantime is not tagged. workflow_dispatch uses github.ref.
+          ref: ${{ github.event_name == 'push' && github.sha || github.event.pull_request.base.ref || github.ref }}
           fetch-depth: 0
           persist-credentials: true # Required for git push of tags
       - name: Read version from file
@@ -442,6 +443,9 @@ jobs:
           publish: false
           version: ${{ steps.version-file.outputs.version }}
           from: ${{ steps.first-release-base.outputs.from }}
+          # Pin push runs to the evaluated commit so notes and version bumps
+          # stop there. Empty keeps release-drafter's default, the workflow branch.
+          commitish: ${{ github.event_name == 'push' && github.sha || '' }}
           token: ${{ secrets.github-token }}
       - name: Check release tag
         # Inline copy of scripts/check-tag.sh. Verifies the tag release-drafter
@@ -519,6 +523,9 @@ jobs:
           publish: false
           version: ${{ steps.version-file.outputs.version }}
           from: ${{ steps.first-release-base.outputs.from }}
+          # Pin push runs to the evaluated commit so notes and version bumps
+          # stop there. Empty keeps release-drafter's default, the workflow branch.
+          commitish: ${{ github.event_name == 'push' && github.sha || '' }}
           token: ${{ secrets.github-token }}
       - name: Get the Short Tag
         id: get_tag_name

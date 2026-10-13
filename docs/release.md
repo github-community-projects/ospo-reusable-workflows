@@ -34,6 +34,8 @@ concurrency:
 
 On `push`, the workflow looks up the pull request that the pushed commit merged and reads its labels. Only a push to the default branch can release. A tag push, a push to another branch, or a direct commit with no merged pull request does not. When several pull requests land in one push, only the one that produced the pushed commit counts. A `workflow_dispatch` run always releases.
 
+A push run checks out, tags, and drafts notes from the pushed commit, so a commit that lands while the release runs waits for its own run. Because the release targets that commit SHA rather than the branch, push-triggered callers cannot set `filter-by-commitish: true` in their release-drafter config.
+
 Callers that still trigger on `pull_request_target` with `types: [closed]` keep working unchanged. The release variants below accept both triggers.
 
 ## Inputs
