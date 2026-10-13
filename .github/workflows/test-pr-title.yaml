@@ -2,8 +2,9 @@
 ---
 name: "Test Lint PR Title"
 on:
-  # pull_request_target event is required for autolabeler to support all PRs including forks
-  pull_request_target:
+  # The check only reads the title, so the read-only token fork pull requests
+  # get is enough. Avoids pull_request_target, which hands them a write token.
+  pull_request:
     types: [opened, reopened, edited, synchronize]
 permissions: {}
 jobs:

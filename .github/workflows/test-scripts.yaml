@@ -41,16 +41,17 @@ jobs:
         run: |
           status=0
           check() {
-            local workflow="$1" step="$2" script="$3"
+            local workflow="$1" job="$2" step="$3" script="$4"
             # Command substitution trims trailing newlines; printf adds back exactly one.
-            if ! diff -u "$script" <(printf '%s\n' "$(yq ".jobs.create_release.steps[] | select(.name == \"$step\") | .run" "$workflow")"); then
+            if ! diff -u "$script" <(printf '%s\n' "$(yq ".jobs.$job.steps[] | select(.name == \"$step\") | .run" "$workflow")"); then
               echo "::error file=$workflow::inline '$step' step drifted from $script"
               status=1
             fi
           }
           for workflow in .github/workflows/release-draft.yaml .github/workflows/release.yaml; do
-            check "$workflow" "Read version from file" scripts/resolve-version.sh
-            check "$workflow" "Check release tag" scripts/check-tag.sh
-            check "$workflow" "Find the first-release baseline" scripts/first-release-base.sh
+            check "$workflow" check_release "Evaluate release conditions" scripts/check-release.sh
+            check "$workflow" create_release "Read version from file" scripts/resolve-version.sh
+            check "$workflow" create_release "Check release tag" scripts/check-tag.sh
+            check "$workflow" create_release "Find the first-release baseline" scripts/first-release-base.sh
           done
           exit "$status"

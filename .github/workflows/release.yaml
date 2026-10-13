@@ -103,6 +103,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read # Required by harden-runner
+      pull-requests: read # Look up the merged pull request on push events
     outputs:
       should-release: ${{ steps.check.outputs.should-release }}
     steps:
@@ -111,43 +112,138 @@ jobs:
         with:
           egress-policy: audit
       - name: Evaluate release conditions
+        # Inline copy of scripts/check-release.sh. A reusable workflow runs in
+        # the caller's checkout, so the script is not on disk here. The
+        # test-scripts workflow fails if this block drifts from the script.
         id: check
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_MERGED: ${{ github.event.pull_request.merged }}
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
           RELEASE_ONLY: ${{ inputs.release-only-with-label }}
+          GH_TOKEN: ${{ secrets.github-token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          should_release=false
+          #!/usr/bin/env bash
+          # Decide whether a workflow run should create a release.
+          #
+          # Usage: check-release.sh
+          #
+          # Reads its inputs from environment variables, which is how the release
+          # workflows invoke the inline copy:
+          #
+          #   EVENT_NAME     github.event_name of the run.
+          #   PR_MERGED      github.event.pull_request.merged, for pull_request events.
+          #   PR_LABELS      Comma-separated labels of the event's pull request.
+          #   RELEASE_ONLY   "true" to release only on the release label.
+          #   GITHUB_REPOSITORY, GITHUB_SHA
+          #                  For push events, the commit whose merged pull request
+          #                  supplies the labels. Needs gh on PATH and a token in GH_TOKEN.
+          #   GITHUB_REF, DEFAULT_BRANCH
+          #                  For push events, the pushed ref and the repository's default
+          #                  branch. Only a push to the default branch can release.
+          #   RETRY_DELAY    Seconds to wait before retrying an empty pull request
+          #                  lookup, default 10. GitHub can take a few seconds to
+          #                  associate a merged pull request with its commit.
+          #
+          # A workflow_dispatch run always releases. A push run releases when it pushed
+          # the default branch and the pushed commit is the merge commit of a merged pull
+          # request that carries a trigger label, so a tag push, a push to another
+          # branch, or a direct push with no pull request does not release. Any other run
+          # releases when its pull request is merged and carries a trigger label. The
+          # trigger labels are breaking, feature, vuln, and release, or only release
+          # when RELEASE_ONLY is true.
+          #
+          # Prints should-release=<true|false> on stdout, and writes the same line to
+          # GITHUB_OUTPUT when that variable is set. Exits 1 when the pull request lookup
+          # fails, so the caller fails closed instead of skipping a release silently.
+          set -euo pipefail
 
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "Manual dispatch: releasing"
-            should_release=true
-          elif [ "$PR_MERGED" != "true" ]; then
-            echo "PR not merged: skipping release"
-          else
-            IFS=',' read -ra labels <<< "${PR_LABELS,,}"
-            if [ "$RELEASE_ONLY" = "true" ]; then
-              for label in "${labels[@]}"; do
-                if [ "$label" = "release" ]; then
-                  should_release=true
-                  break
-                fi
-              done
-            else
-              for label in "${labels[@]}"; do
-                case "$label" in
-                  breaking|feature|vuln|release)
-                    should_release=true
-                    break
-                    ;;
-                esac
-              done
+          event="${EVENT_NAME:-}"
+          merged="${PR_MERGED:-}"
+          labels_csv="${PR_LABELS:-}"
+          release_only="${RELEASE_ONLY:-false}"
+
+          finish() {
+            echo "should-release=$1"
+            if [ -n "${GITHUB_OUTPUT:-}" ]; then
+              echo "should-release=$1" >> "$GITHUB_OUTPUT"
             fi
-            echo "PR labels: ${PR_LABELS}, release-only-with-label: ${RELEASE_ONLY}, should-release: ${should_release}"
+            exit 0
+          }
+
+          if [ "$event" = "workflow_dispatch" ]; then
+            echo "Manual dispatch: releasing" >&2
+            finish true
           fi
 
-          echo "should-release=$should_release" >> "$GITHUB_OUTPUT"
+          if [ "$event" = "push" ]; then
+            repo="${GITHUB_REPOSITORY:-}"
+            sha="${GITHUB_SHA:-}"
+            ref="${GITHUB_REF:-}"
+            default_branch="${DEFAULT_BRANCH:-}"
+            if [ -z "$repo" ] || [ -z "$default_branch" ]; then
+              echo "::error::GITHUB_REPOSITORY and DEFAULT_BRANCH are required for push events" >&2
+              exit 1
+            fi
+            # A tag that points at a merge commit would otherwise release that pull
+            # request a second time.
+            if [ "$ref" != "refs/heads/$default_branch" ]; then
+              echo "Push to $ref, not the default branch $default_branch: skipping release" >&2
+              finish false
+            fi
+            # The SHA is interpolated into the jq filter, so accept only a full hex SHA.
+            if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::GITHUB_SHA '$sha' is not a full commit SHA" >&2
+              exit 1
+            fi
+
+            # The endpoint also lists open pull requests whose branch contains the
+            # commit, so keep only the one this commit merged. Each match prints as
+            # "#<number> <labels>" so a pull request without labels is still found.
+            filter=".[] | select(.merged_at != null and .merge_commit_sha == \"$sha\") | \"#\(.number) \([.labels[].name] | join(\",\"))\""
+            match=""
+            for attempt in 1 2; do
+              if ! match=$(gh api "repos/$repo/commits/$sha/pulls" --jq "$filter"); then
+                echo "::error::could not look up pull requests for $sha in $repo" >&2
+                exit 1
+              fi
+              if [ -n "$match" ] || [ "$attempt" -eq 2 ]; then
+                break
+              fi
+              echo "No merged pull request found for $sha yet: retrying" >&2
+              sleep "${RETRY_DELAY:-10}"
+            done
+
+            if [ -z "$match" ]; then
+              echo "No merged pull request for $sha: skipping release" >&2
+              finish false
+            fi
+            match="${match%%$'\n'*}"
+            pr="${match%% *}"
+            labels_csv="${match#* }"
+            echo "Commit $sha merged pull request $pr" >&2
+          elif [ "$merged" != "true" ]; then
+            echo "PR not merged: skipping release" >&2
+            finish false
+          fi
+
+          should_release=false
+          IFS=',' read -ra labels <<< "${labels_csv,,}"
+          for label in "${labels[@]}"; do
+            if [ "$release_only" = "true" ]; then
+              [ "$label" = "release" ] || continue
+            else
+              case "$label" in
+                breaking|feature|vuln|release) ;;
+                *) continue ;;
+              esac
+            fi
+            should_release=true
+            break
+          done
+          echo "PR labels: ${labels_csv}, release-only-with-label: ${release_only}, should-release: ${should_release}" >&2
+          finish "$should_release"
 
   create_release:
     needs: check_release
@@ -173,8 +269,10 @@ jobs:
           # explicit ref, pull_request_target defaults to refs/pull/N/merge,
           # which checkout v7 refuses as fork code. Pinning to merge_commit_sha
           # would also be refused (it is in the guard's blocklist), so the base
-          # branch is the guard-safe choice.
-          ref: ${{ github.event.pull_request.base.ref || github.ref }}
+          # branch is the guard-safe choice. A push run checks out the commit
+          # check_release evaluated, so a commit landing on the branch in the
+          # meantime is not tagged. workflow_dispatch uses github.ref.
+          ref: ${{ github.event_name == 'push' && github.sha || github.event.pull_request.base.ref || github.ref }}
           fetch-depth: 0
           persist-credentials: true # Required for git push of tags
       - name: Read version from file
@@ -345,6 +443,9 @@ jobs:
           publish: false
           version: ${{ steps.version-file.outputs.version }}
           from: ${{ steps.first-release-base.outputs.from }}
+          # Pin push runs to the evaluated commit so notes and version bumps
+          # stop there. Empty keeps release-drafter's default, the workflow branch.
+          commitish: ${{ github.event_name == 'push' && github.sha || '' }}
           token: ${{ secrets.github-token }}
       - name: Check release tag
         # Inline copy of scripts/check-tag.sh. Verifies the tag release-drafter
@@ -422,6 +523,9 @@ jobs:
           publish: false
           version: ${{ steps.version-file.outputs.version }}
           from: ${{ steps.first-release-base.outputs.from }}
+          # Pin push runs to the evaluated commit so notes and version bumps
+          # stop there. Empty keeps release-drafter's default, the workflow branch.
+          commitish: ${{ github.event_name == 'push' && github.sha || '' }}
           token: ${{ secrets.github-token }}
       - name: Get the Short Tag
         id: get_tag_name

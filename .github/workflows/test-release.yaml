@@ -2,10 +2,13 @@
 name: "Test Release"
 on:
   workflow_dispatch:
-  # pull_request_target event is required for autolabeler to support all PRs including forks
-  pull_request_target:
-    types: [closed]
+  # Release from the merge commit on main. Avoids pull_request_target, which
+  # hands a write token to runs for fork pull requests.
+  push:
     branches: [main]
+concurrency:
+  group: release
+  cancel-in-progress: false
 jobs:
   release:
     permissions:

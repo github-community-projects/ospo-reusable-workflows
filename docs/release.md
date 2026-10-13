@@ -18,6 +18,26 @@ GitHub validates the permissions of every job in a called reusable workflow at p
 
 All variants share the same draft-first core: they create the draft release and tags, run their build jobs, and only then publish, so immutable releases stay supported. To announce releases from a variant, chain [release-discussion.yaml](release-discussion.md) on the variant's outputs.
 
+## Triggering a release
+
+Call the workflow on `push` to your default branch. This keeps `pull_request_target`, and the write token it hands to runs for fork pull requests, out of your repository. OSPS Baseline scanners flag that trigger under OSPS-BR-01.03.
+
+```yaml
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+concurrency:
+  group: release
+  cancel-in-progress: false
+```
+
+On `push`, the workflow looks up the pull request that the pushed commit merged and reads its labels. Only a push to the default branch can release. A tag push, a push to another branch, or a direct commit with no merged pull request does not. When several pull requests land in one push, only the one that produced the pushed commit counts. A `workflow_dispatch` run always releases.
+
+A push run checks out, tags, and drafts notes from the pushed commit, so a commit that lands while the release runs waits for its own run. Because the release targets that commit SHA rather than the branch, push-triggered callers cannot set `filter-by-commitish: true` in their release-drafter config.
+
+Callers that still trigger on `pull_request_target` with `types: [closed]` keep working unchanged. The release variants below accept both triggers.
+
 ## Inputs
 
 ```yaml
@@ -190,7 +210,7 @@ gh api graphql -f query='
 
 The variant workflows are thin compositions of two building blocks, which are also callable directly if no variant fits your needs:
 
-- [release-draft.yaml](../.github/workflows/release-draft.yaml) - evaluates release conditions (PR merged + trigger labels, or manual dispatch), creates the draft release via release-drafter, and pushes the full and major version tags. Outputs `should-release`, `full-tag`, `short-tag`, `body`, and `release-id`. Requires `contents: write`, `pull-requests: read`.
+- [release-draft.yaml](../.github/workflows/release-draft.yaml) - evaluates release conditions (merged PR with trigger labels, from a `push` or `pull_request_target` event, or manual dispatch), creates the draft release via release-drafter, and pushes the full and major version tags. Outputs `should-release`, `full-tag`, `short-tag`, `body`, and `release-id`. Requires `contents: write`, `pull-requests: read`.
 - [release-publish.yaml](../.github/workflows/release-publish.yaml) - publishes the draft release by `release-id`. Requires `contents: write`.
 
 Put your own build jobs between them to attach assets to the draft before it publishes:
