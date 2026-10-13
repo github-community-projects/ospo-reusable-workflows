@@ -1,15 +1,15 @@
 ---
 name: "Auto Author Assign"
-# Uses pull_request_target so the assign step gets a read-write token on fork
-# PRs (pull_request hands forks a read-only token, which makes the assignees
-# API call fail). Safe here: the workflow never checks out or executes PR-head
-# code, it only assigns the author via the API from the event payload.
+# Fork pull requests get a read-only token, so the job skips them and
+# maintainers assign the author by hand. Avoids pull_request_target, which
+# hands a write token to runs for fork pull requests.
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, reopened, synchronize]
 permissions: {}
 jobs:
   assign:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write # Assign the PR author
