@@ -6,6 +6,8 @@ The draft-first pattern supports repositories with **immutable releases** enable
 
 ## Usage
 
+Trigger this workflow on `push` to your default branch instead of `pull_request_target`. See [Triggering a release](release.md#triggering-a-release).
+
 ```yaml
 jobs:
   release:

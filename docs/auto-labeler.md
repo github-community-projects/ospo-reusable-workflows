@@ -1,5 +1,30 @@
 # Auto-labeler Reusable Workflow
 
+## Triggering
+
+Call the workflow on `pull_request` and skip pull requests from forks. Avoid `pull_request_target`: it hands a write token to runs for fork pull requests, and OSPS Baseline scanners flag it under OSPS-BR-01.03.
+
+```yaml
+on:
+  pull_request:
+    types: [opened, reopened, edited, synchronize]
+jobs:
+  auto_labeler:
+    # Fork pull requests get a read-only token and cannot be labeled.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/auto-labeler.yaml@main
+    with:
+      config-name: release-drafter.yml
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+Label pull requests from forks by hand before merging. The [release workflows](release.md) read labels when the pull request merges, so a label added by hand drives release notes and version bumps the same way.
+
 ## Inputs
 
 ```yaml

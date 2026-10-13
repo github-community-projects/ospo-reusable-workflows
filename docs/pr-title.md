@@ -1,5 +1,15 @@
 # PR Title Reusable Workflow
 
+## Triggering
+
+Call the workflow on `pull_request`. It only reads the pull request title, so the read-only token that fork pull requests get is enough. Avoid `pull_request_target`: it hands a write token to runs for fork pull requests, and OSPS Baseline scanners flag it under OSPS-BR-01.03.
+
+```yaml
+on:
+  pull_request:
+    types: [opened, reopened, edited, synchronize]
+```
+
 ## Inputs
 
 ```yaml
