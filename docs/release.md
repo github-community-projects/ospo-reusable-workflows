@@ -36,7 +36,7 @@ On `push`, the workflow looks up the pull request that the pushed commit merged 
 
 A push run checks out, tags, and drafts notes from the pushed commit, so a commit that lands while the release runs waits for its own run. Because the release targets that commit SHA rather than the branch, push-triggered callers cannot set `filter-by-commitish: true` in their release-drafter config.
 
-Callers that still trigger on `pull_request_target` with `types: [closed]` keep working unchanged. The release variants below accept both triggers.
+Callers that still trigger on `pull_request_target` with `types: [closed]` keep working. Those runs check out, tag, and draft notes from the pull request's merge commit, after verifying that the commit is on the base branch. They also target a commit SHA, so they cannot set `filter-by-commitish: true` either. The release variants below accept both triggers.
 
 ## Inputs
 
