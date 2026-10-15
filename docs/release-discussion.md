@@ -15,7 +15,7 @@ jobs:
     permissions:
       contents: write # Create releases and push tags
       pull-requests: read # Read PR labels for release-drafter
-    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-minimal.yaml@main
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-minimal.yaml@[latest sha here] # vX.Y.Z
     with:
       release-config-name: release-drafter.yml
     secrets:
@@ -28,7 +28,7 @@ jobs:
     permissions:
       contents: read # Required by harden-runner
       discussions: write # Create announcement discussions
-    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-discussion.yaml@main
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-discussion.yaml@[latest sha here] # vX.Y.Z
     with:
       full-tag: ${{ needs.release.outputs.full-tag }}
       body: ${{ needs.release.outputs.body }}

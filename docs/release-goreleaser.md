@@ -22,7 +22,7 @@ jobs:
     permissions:
       contents: write # Create releases, push tags, upload release assets
       pull-requests: read # Read PR labels for release-drafter
-    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-goreleaser.yaml@main
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-goreleaser.yaml@[latest sha here] # vX.Y.Z
     with:
       # The name of the configuration file to use
       # from the release-drafter/release-drafter GitHub Action
@@ -53,7 +53,7 @@ With attestation, use `release-goreleaser-attest.yaml` instead (same inputs) and
       pull-requests: read # Read PR labels for release-drafter
       id-token: write # Federate for attestation
       attestations: write # Generate artifact and SBOM attestations
-    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-goreleaser-attest.yaml@main
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-goreleaser-attest.yaml@[latest sha here] # vX.Y.Z
 ```
 
 ## Version from a file

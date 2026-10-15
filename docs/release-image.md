@@ -11,7 +11,7 @@ Replace your existing `release-image.yaml` call:
 # Before (deprecated)
 release_image:
   needs: release
-  uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-image.yaml@main
+  uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-image.yaml@[latest sha here] # vX.Y.Z
   with:
     image-name: ${{ github.repository }}
     full-tag: ${{ needs.release.outputs.full-tag }}
@@ -29,7 +29,7 @@ With the consolidated `release.yaml` inputs:
 ```yaml
 # After
 release:
-  uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release.yaml@main
+  uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release.yaml@[latest sha here] # vX.Y.Z
   with:
     release-config-name: release-drafter.yaml
     image-name: ${{ github.repository }}

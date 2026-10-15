@@ -23,7 +23,7 @@ jobs:
       contents: write # Create releases and push tags
       pull-requests: read # Read PR labels for release-drafter
       packages: write # Push container images
-    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-container.yaml@main
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-container.yaml@[latest sha here] # vX.Y.Z
     with:
       # The name of the configuration file to use
       # from the release-drafter/release-drafter GitHub Action
@@ -70,7 +70,7 @@ With attestation, use `release-container-attest.yaml` instead (same inputs and s
       packages: write # Push container images
       id-token: write # Federate via Workload Identity for attestation
       attestations: write # Create build provenance attestation
-    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-container-attest.yaml@main
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-container-attest.yaml@[latest sha here] # vX.Y.Z
 ```
 
 ## Version from a file
