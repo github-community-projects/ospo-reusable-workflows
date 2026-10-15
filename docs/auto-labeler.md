@@ -19,7 +19,7 @@ jobs:
       contents: read
       pull-requests: write
       issues: write
-    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/auto-labeler.yaml@[latest sha here] # vX.Y.Z
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/auto-labeler.yaml@[latest SHA here] # vX.Y.Z
     with:
       config-name: release-drafter.yml
     secrets:
@@ -31,7 +31,7 @@ Label pull requests from forks by hand before merging. The [release workflows](r
 ## Inputs
 
 ```yaml
-- uses: github-community-projects/ospo-reusable-workflows/.github/workflows/auto-labeler.yaml@[latest sha here] # vX.Y.Z
+- uses: github-community-projects/ospo-reusable-workflows/.github/workflows/auto-labeler.yaml@[latest SHA here] # vX.Y.Z
   permissions:
     contents: read # Read the autolabeler config
     pull-requests: write # Apply labels to the pull request

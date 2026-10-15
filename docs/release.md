@@ -44,7 +44,7 @@ Callers that still trigger on `pull_request_target` with `types: [closed]` keep 
 ## Inputs
 
 ```yaml
-- uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release.yaml@[latest sha here] # vX.Y.Z
+- uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release.yaml@[latest SHA here] # vX.Y.Z
   permissions:
     contents: write
     pull-requests: read
@@ -224,7 +224,7 @@ jobs:
     permissions:
       contents: write # Create draft release and push tags
       pull-requests: read # Read PR labels for release-drafter
-    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-draft.yaml@[latest sha here] # vX.Y.Z
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-draft.yaml@[latest SHA here] # vX.Y.Z
     with:
       release-config-name: release-drafter.yml
     secrets:
@@ -247,7 +247,7 @@ jobs:
     if: ${{ needs.draft.outputs.release-id != '' }}
     permissions:
       contents: write # Publish draft release
-    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-publish.yaml@[latest sha here] # vX.Y.Z
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-publish.yaml@[latest SHA here] # vX.Y.Z
     with:
       release-id: ${{ needs.draft.outputs.release-id }}
     secrets:

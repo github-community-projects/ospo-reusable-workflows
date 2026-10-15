@@ -22,10 +22,10 @@ This is a placeholder repo for multiple GitHub Actions we use in open source pro
 Pin to a full commit SHA, never a tag or branch, and add the release version as a trailing comment. The examples in `docs/` show the format with a placeholder:
 
 ```yaml
-uses: github-community-projects/ospo-reusable-workflows/.github/workflows/auto-labeler.yaml@[latest sha here] # vX.Y.Z
+uses: github-community-projects/ospo-reusable-workflows/.github/workflows/auto-labeler.yaml@[latest SHA here] # vX.Y.Z
 ```
 
-Replace `[latest sha here]` with the commit SHA of the latest release, and `vX.Y.Z` with that release's version. The placeholder is not a valid ref, so a copied example fails until you do.
+Replace `[latest SHA here]` with the commit SHA of the latest release, and `vX.Y.Z` with that release's version. The placeholder is not a valid ref, so a copied example fails until you do.
 
 Keep the `# vX.Y.Z` comment. Dependabot reads it as the current version, bumps the SHA and the comment together, and shows the version in its pull requests. A bare SHA has no version reference, so Dependabot bumps the SHA but the version never appears.
 

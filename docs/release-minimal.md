@@ -17,7 +17,7 @@ jobs:
     permissions:
       contents: write # Create releases and push tags
       pull-requests: read # Read PR labels for release-drafter
-    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-minimal.yaml@[latest sha here] # vX.Y.Z
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-minimal.yaml@[latest SHA here] # vX.Y.Z
     with:
       # The name of the configuration file to use
       # from the release-drafter/release-drafter GitHub Action

@@ -6,7 +6,7 @@
 ## Inputs
 
 ```yaml
-- uses: github-community-projects/ospo-reusable-workflows/.github/workflows/major-version-updater.yaml@[latest sha here] # vX.Y.Z
+- uses: github-community-projects/ospo-reusable-workflows/.github/workflows/major-version-updater.yaml@[latest SHA here] # vX.Y.Z
   permissions:
     contents: write
   with:

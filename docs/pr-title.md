@@ -16,7 +16,7 @@ on:
 ## Inputs
 
 ```yaml
-- uses: github-community-projects/ospo-reusable-workflows/.github/workflows/pr-title.yaml@[latest sha here] # vX.Y.Z
+- uses: github-community-projects/ospo-reusable-workflows/.github/workflows/pr-title.yaml@[latest SHA here] # vX.Y.Z
   permissions:
     contents: read
     pull-requests: read

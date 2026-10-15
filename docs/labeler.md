@@ -30,7 +30,7 @@ Label pull requests from forks and from Dependabot by hand before merging.
 ## Inputs
 
 ```yaml
-- uses: github-community-projects/ospo-reusable-workflows/.github/workflows/labeler.yaml@[latest sha here] # vX.Y.Z
+- uses: github-community-projects/ospo-reusable-workflows/.github/workflows/labeler.yaml@[latest SHA here] # vX.Y.Z
   permissions:
     contents: read
     pull-requests: write
