@@ -17,6 +17,18 @@ This is a placeholder repo for multiple GitHub Actions we use in open source pro
 - [Release Container](docs/release-container.md) (with and without attestation)
 - [Release Discussion](docs/release-discussion.md) (chainable announcement)
 
+## Pinning to a SHA
+
+The examples in `docs/` use `@main` so they stay readable. In your own workflows, pin to the full commit SHA of a release and add the version as a trailing comment:
+
+```yaml
+uses: github-community-projects/ospo-reusable-workflows/.github/workflows/auto-labeler.yaml@<full-sha> # v2.3.0
+```
+
+Keep the `# vX.Y.Z` comment. Dependabot reads it as the current version, bumps the SHA and the comment together, and shows the version in its pull requests. A bare SHA has no version reference, so Dependabot bumps the SHA but the version never appears.
+
+Find the SHA for a release on the [releases page](https://github.com/github-community-projects/ospo-reusable-workflows/releases). To verify that every pinned SHA has a matching version comment, run [pinact](https://github.com/suzuki-shunsuke/pinact) in check mode (`pinact run --check`).
+
 > [!CAUTION]
 > Check the permissions in each reusable workflow to ensure the GitHub token you pass from your calling workflow meets the required permissions. Most of the time just passing `${{ secrets.GITHUB_TOKEN }}` is sufficient.
 > This may require you to go to your repository settings and then Actions to `Actions Permission` and enable reusable workflows. You may also need to update `Workflow Permissions` to `Read and write permissions`.

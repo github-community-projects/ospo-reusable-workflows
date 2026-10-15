@@ -1,5 +1,8 @@
 # Labeler Reusable Workflow
 
+> [!TIP]
+> Pin the `uses:` line to a full commit SHA with a trailing version comment. See [Pinning to a SHA](../README.md#pinning-to-a-sha).
+
 ## Triggering
 
 Call the workflow on `pull_request` and skip pull requests from forks and Dependabot. Avoid `pull_request_target`: it hands a write token to runs for fork pull requests, and OSPS Baseline scanners flag it under OSPS-BR-01.03.

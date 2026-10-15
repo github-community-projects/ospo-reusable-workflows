@@ -1,5 +1,8 @@
 # Major Version Updater
 
+> [!TIP]
+> Pin the `uses:` line to a full commit SHA with a trailing version comment. See [Pinning to a SHA](../README.md#pinning-to-a-sha).
+
 ## Inputs
 
 ```yaml

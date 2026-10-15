@@ -1,5 +1,8 @@
 # Release Reusable Workflow
 
+> [!TIP]
+> Pin the `uses:` line to a full commit SHA with a trailing version comment. See [Pinning to a SHA](../README.md#pinning-to-a-sha).
+
 Consolidated release workflow that creates a draft release, optionally builds artifacts (GoReleaser, Docker images), publishes the release after all build jobs succeed, and then creates a GitHub Discussions announcement. This draft-first pattern supports repositories with immutable releases enabled and ensures announcements only fire for releases that publish successfully.
 
 ## Choosing a variant

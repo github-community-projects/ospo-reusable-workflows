@@ -1,5 +1,8 @@
 # Release Container Reusable Workflows
 
+> [!TIP]
+> Pin the `uses:` line to a full commit SHA with a trailing version comment. See [Pinning to a SHA](../README.md#pinning-to-a-sha).
+
 Creates a draft release via release-drafter, pushes the full and major version git tags, builds and pushes a multi-platform Docker image tagged `latest`, the full tag, and the short tag, and publishes the release. The draft-first pattern supports repositories with **immutable releases** enabled.
 
 Two variants:
