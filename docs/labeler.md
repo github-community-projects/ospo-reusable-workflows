@@ -2,7 +2,7 @@
 
 ## Triggering
 
-Call the workflow on `pull_request` and skip pull requests from forks. Avoid `pull_request_target`: it hands a write token to runs for fork pull requests, and OSPS Baseline scanners flag it under OSPS-BR-01.03.
+Call the workflow on `pull_request` and skip pull requests from forks and Dependabot. Avoid `pull_request_target`: it hands a write token to runs for fork pull requests, and OSPS Baseline scanners flag it under OSPS-BR-01.03.
 
 ```yaml
 on:
@@ -10,8 +10,8 @@ on:
     types: [opened, reopened, edited, synchronize]
 jobs:
   labeler:
-    # Fork pull requests get a read-only token and cannot be labeled.
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # Fork and Dependabot pull requests get a read-only token and cannot be labeled.
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
     permissions:
       contents: read
       pull-requests: write
@@ -22,7 +22,7 @@ jobs:
       github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-Label pull requests from forks by hand before merging.
+Label pull requests from forks and from Dependabot by hand before merging.
 
 ## Inputs
 
