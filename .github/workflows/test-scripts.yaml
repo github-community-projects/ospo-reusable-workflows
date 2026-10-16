@@ -50,6 +50,7 @@ jobs:
           }
           for workflow in .github/workflows/release-draft.yaml .github/workflows/release.yaml; do
             check "$workflow" check_release "Evaluate release conditions" scripts/check-release.sh
+            check "$workflow" create_release "Pin to the merge commit" scripts/pin-merge-commit.sh
             check "$workflow" create_release "Read version from file" scripts/resolve-version.sh
             check "$workflow" create_release "Check release tag" scripts/check-tag.sh
             check "$workflow" create_release "Find the first-release baseline" scripts/first-release-base.sh
