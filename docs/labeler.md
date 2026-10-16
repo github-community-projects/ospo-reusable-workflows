@@ -18,7 +18,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/labeler.yaml@main
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/labeler.yaml@[latest SHA here] # vX.Y.Z
     with:
       config-path: labeler.yml
     secrets:
