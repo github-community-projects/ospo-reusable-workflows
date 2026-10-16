@@ -1,13 +1,10 @@
 name: Mark PR Ready When Ready
 
-# Uses pull_request_target so the mark-ready step gets a read-write token on
-# fork PRs (pull_request hands forks a read-only token, so contents: write is
-# denied and the job fails). Safe here: the workflow never checks out or
-# executes PR-head code. The action reads the PR number, draft flag, labels,
-# and head SHA from the event payload and acts only via the API, so running in
-# the base-repo context does not evaluate any untrusted code.
+# Fork pull requests get a read-only token, so the job skips them and
+# maintainers mark fork drafts ready by hand. Avoids pull_request_target, which
+# hands a write token to runs for fork pull requests.
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, edited, labeled, unlabeled, synchronize]
 
 permissions: {}
@@ -26,6 +23,8 @@ jobs:
       pull-requests: write # Flip the PR out of draft
       statuses: read # Read commit statuses
     if: |
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]' &&
       contains(github.event.pull_request.labels.*.name, 'Mark Ready When Ready') &&
       github.event.pull_request.draft == true
     steps:

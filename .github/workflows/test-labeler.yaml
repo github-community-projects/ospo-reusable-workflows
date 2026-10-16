@@ -1,12 +1,14 @@
 ---
 name: "Test Pull Request Labeler"
 on:
-  # pull_request_target event is required for autolabeler to support all PRs including forks
-  pull_request_target:
+  # Fork pull requests get a read-only token and are labeled by hand. Avoids
+  # pull_request_target, which hands a write token to runs for fork pull requests.
+  pull_request:
     types: [opened, reopened, edited, synchronize]
 permissions: {}
 jobs:
   labeler:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
     permissions:
       contents: read # Read the labeler configuration
       pull-requests: write # Apply labels to the pull request
