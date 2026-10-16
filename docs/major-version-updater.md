@@ -1,9 +1,12 @@
 # Major Version Updater
 
+> [!TIP]
+> Pin the `uses:` line to a full commit SHA with a trailing version comment. See [Pinning to a SHA](../README.md#pinning-to-a-sha).
+
 ## Inputs
 
 ```yaml
-- uses: github-community-projects/ospo-reusable-workflows/.github/workflows/major-version-updater.yaml@main
+- uses: github-community-projects/ospo-reusable-workflows/.github/workflows/major-version-updater.yaml@[latest SHA here] # vX.Y.Z
   permissions:
     contents: write
   with:

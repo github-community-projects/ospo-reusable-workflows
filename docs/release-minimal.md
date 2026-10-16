@@ -1,5 +1,8 @@
 # Release Minimal Reusable Workflow
 
+> [!TIP]
+> Pin the `uses:` line to a full commit SHA with a trailing version comment. See [Pinning to a SHA](../README.md#pinning-to-a-sha).
+
 Creates a draft release via release-drafter, pushes the full and major version git tags, and publishes the release. No artifact builds. This is the right variant for repositories that only need release-drafter + tagging (for example, GitHub Action repositories).
 
 The draft-first pattern supports repositories with **immutable releases** enabled.
@@ -14,7 +17,7 @@ jobs:
     permissions:
       contents: write # Create releases and push tags
       pull-requests: read # Read PR labels for release-drafter
-    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-minimal.yaml@main
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-minimal.yaml@[latest SHA here] # vX.Y.Z
     with:
       # The name of the configuration file to use
       # from the release-drafter/release-drafter GitHub Action

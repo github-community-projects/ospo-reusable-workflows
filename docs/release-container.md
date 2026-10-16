@@ -1,5 +1,8 @@
 # Release Container Reusable Workflows
 
+> [!TIP]
+> Pin the `uses:` line to a full commit SHA with a trailing version comment. See [Pinning to a SHA](../README.md#pinning-to-a-sha).
+
 Creates a draft release via release-drafter, pushes the full and major version git tags, builds and pushes a multi-platform Docker image tagged `latest`, the full tag, and the short tag, and publishes the release. The draft-first pattern supports repositories with **immutable releases** enabled.
 
 Two variants:
@@ -20,7 +23,7 @@ jobs:
       contents: write # Create releases and push tags
       pull-requests: read # Read PR labels for release-drafter
       packages: write # Push container images
-    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-container.yaml@main
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-container.yaml@[latest SHA here] # vX.Y.Z
     with:
       # The name of the configuration file to use
       # from the release-drafter/release-drafter GitHub Action
@@ -67,7 +70,7 @@ With attestation, use `release-container-attest.yaml` instead (same inputs and s
       packages: write # Push container images
       id-token: write # Federate via Workload Identity for attestation
       attestations: write # Create build provenance attestation
-    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-container-attest.yaml@main
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-container-attest.yaml@[latest SHA here] # vX.Y.Z
 ```
 
 ## Version from a file

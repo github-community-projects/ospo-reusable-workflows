@@ -1,5 +1,8 @@
 # Release GoReleaser Reusable Workflows
 
+> [!TIP]
+> Pin the `uses:` line to a full commit SHA with a trailing version comment. See [Pinning to a SHA](../README.md#pinning-to-a-sha).
+
 Creates a draft release via release-drafter, pushes the full and major version git tags, builds Go binaries with GoReleaser, uploads the artifacts to the draft release, and publishes the release. The draft-first pattern supports repositories with **immutable releases** enabled.
 
 Two variants:
@@ -19,7 +22,7 @@ jobs:
     permissions:
       contents: write # Create releases, push tags, upload release assets
       pull-requests: read # Read PR labels for release-drafter
-    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-goreleaser.yaml@main
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-goreleaser.yaml@[latest SHA here] # vX.Y.Z
     with:
       # The name of the configuration file to use
       # from the release-drafter/release-drafter GitHub Action
@@ -50,7 +53,7 @@ With attestation, use `release-goreleaser-attest.yaml` instead (same inputs) and
       pull-requests: read # Read PR labels for release-drafter
       id-token: write # Federate for attestation
       attestations: write # Generate artifact and SBOM attestations
-    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-goreleaser-attest.yaml@main
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/release-goreleaser-attest.yaml@[latest SHA here] # vX.Y.Z
 ```
 
 ## Version from a file

@@ -1,5 +1,8 @@
 # Auto-labeler Reusable Workflow
 
+> [!TIP]
+> Pin the `uses:` line to a full commit SHA with a trailing version comment. See [Pinning to a SHA](../README.md#pinning-to-a-sha).
+
 ## Triggering
 
 Call the workflow on `pull_request` and skip pull requests from forks. Avoid `pull_request_target`: it hands a write token to runs for fork pull requests, and OSPS Baseline scanners flag it under OSPS-BR-01.03.
@@ -16,7 +19,7 @@ jobs:
       contents: read
       pull-requests: write
       issues: write
-    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/auto-labeler.yaml@main
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/auto-labeler.yaml@[latest SHA here] # vX.Y.Z
     with:
       config-name: release-drafter.yml
     secrets:
@@ -28,7 +31,7 @@ Label pull requests from forks by hand before merging. The [release workflows](r
 ## Inputs
 
 ```yaml
-- uses: github-community-projects/ospo-reusable-workflows/.github/workflows/auto-labeler.yaml@main
+- uses: github-community-projects/ospo-reusable-workflows/.github/workflows/auto-labeler.yaml@[latest SHA here] # vX.Y.Z
   permissions:
     contents: read # Read the autolabeler config
     pull-requests: write # Apply labels to the pull request

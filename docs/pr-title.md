@@ -1,5 +1,8 @@
 # PR Title Reusable Workflow
 
+> [!TIP]
+> Pin the `uses:` line to a full commit SHA with a trailing version comment. See [Pinning to a SHA](../README.md#pinning-to-a-sha).
+
 ## Triggering
 
 Call the workflow on `pull_request`. It only reads the pull request title, so the read-only token that fork pull requests get is enough. Avoid `pull_request_target`: it hands a write token to runs for fork pull requests, and OSPS Baseline scanners flag it under OSPS-BR-01.03.
@@ -13,7 +16,7 @@ on:
 ## Inputs
 
 ```yaml
-- uses: github-community-projects/ospo-reusable-workflows/.github/workflows/pr-title.yaml@main
+- uses: github-community-projects/ospo-reusable-workflows/.github/workflows/pr-title.yaml@[latest SHA here] # vX.Y.Z
   permissions:
     contents: read
     pull-requests: read

@@ -1,5 +1,8 @@
 # Labeler Reusable Workflow
 
+> [!TIP]
+> Pin the `uses:` line to a full commit SHA with a trailing version comment. See [Pinning to a SHA](../README.md#pinning-to-a-sha).
+
 ## Triggering
 
 Call the workflow on `pull_request` and skip pull requests from forks and Dependabot. Avoid `pull_request_target`: it hands a write token to runs for fork pull requests, and OSPS Baseline scanners flag it under OSPS-BR-01.03.
@@ -15,7 +18,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/labeler.yaml@main
+    uses: github-community-projects/ospo-reusable-workflows/.github/workflows/labeler.yaml@[latest SHA here] # vX.Y.Z
     with:
       config-path: labeler.yml
     secrets:
@@ -27,7 +30,7 @@ Label pull requests from forks and from Dependabot by hand before merging.
 ## Inputs
 
 ```yaml
-- uses: github-community-projects/ospo-reusable-workflows/.github/workflows/labeler.yaml@main
+- uses: github-community-projects/ospo-reusable-workflows/.github/workflows/labeler.yaml@[latest SHA here] # vX.Y.Z
   permissions:
     contents: read
     pull-requests: write
