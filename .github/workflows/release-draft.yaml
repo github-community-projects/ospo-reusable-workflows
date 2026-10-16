@@ -228,7 +228,7 @@ jobs:
         # Inline copy of scripts/pin-merge-commit.sh. A reusable workflow runs in
         # the caller's checkout, so the script is not on disk here. The
         # test-scripts workflow fails if this block drifts from the script.
-        if: github.event_name == 'pull_request_target' && github.event.pull_request.merged
+        if: github.event.pull_request.merged
         env:
           MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
         run: |
