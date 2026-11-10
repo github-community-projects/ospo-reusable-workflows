@@ -90,7 +90,7 @@ jobs:
       is_public: ${{ steps.repo-visibility.outputs.is_public }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
           egress-policy: audit
 
@@ -104,7 +104,7 @@ jobs:
           persist-credentials: false
 
       - name: Install yq
-        uses: mikefarah/yq@504fc38780cc46be8444ea1b72fb55919fc0bfb0 # v4.54.1
+        uses: mikefarah/yq@a4330671f17776618660a419ab2531e4f4dc48b6 # v4.54.2
         with:
           cmd: echo "yq installed"
 
@@ -224,7 +224,7 @@ jobs:
       matrix: ${{ fromJson(needs.release_goreleaser.outputs.sbom_matrix) }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
           egress-policy: audit
 
