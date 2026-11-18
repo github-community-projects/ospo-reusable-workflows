@@ -437,7 +437,7 @@ jobs:
         # Dry run of the draft step below: resolves tag_name without creating or
         # updating a release, so the tag check can fail before a draft exists.
         id: resolve-tag
-        uses: release-drafter/release-drafter@978bb0b30c5ee8cdd332ced253758157150d43f0 # v7.10.0
+        uses: release-drafter/release-drafter@d1a19e60e81a7e650d00a7de9277f87e439117ea # v7.11.0
         with:
           config-name: ${{ inputs.release-config-name }}
           dry-run: true
@@ -519,7 +519,7 @@ jobs:
           exit 1
       - name: Draft release
         id: release-drafter
-        uses: release-drafter/release-drafter@978bb0b30c5ee8cdd332ced253758157150d43f0 # v7.10.0
+        uses: release-drafter/release-drafter@d1a19e60e81a7e650d00a7de9277f87e439117ea # v7.11.0
         with:
           config-name: ${{ inputs.release-config-name }}
           publish: false
